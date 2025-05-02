@@ -49,8 +49,11 @@
                 </div>
             </div>
             
-            {{-- Map container --}}
-            <div id="map-container" class="w-full h-64 rounded-lg mb-6 shadow-sm border border-gray-200" style="height: 300px !important;"></div>            
+            {{-- Map container dengan wire:ignore untuk mencegah re-render --}}
+            <div wire:ignore>
+                <div id="map-container" class="w-full rounded-lg mb-6 shadow-sm border border-gray-200" style="height: 400px !important; min-height: 300px;"></div>
+            </div>
+            
             {{-- Data table --}}
             <div class="overflow-x-auto">
                 <table class="w-full">
@@ -80,6 +83,19 @@
             </div>
         </div>
         
+        <style>
+            #map-container {
+                height: 400px !important;
+                width: 100% !important;
+                min-height: 300px !important;
+                z-index: 1;
+            }
+            .leaflet-container {
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+        
         @pushOnce('scripts')
             {{-- Include Leaflet CSS --}}
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -89,48 +105,76 @@
         @endPushOnce
         
         <script>
-            // Variabel global untuk menyimpan instance peta
-            let mapInstance = null;
-        
-            function initMap(locations) {
-                // Cek apakah container masih ada di DOM
-                const container = document.getElementById('map-container');
-                if (!container) return;
-                
-                // Bersihkan instance peta yang sudah ada (jika ada)
-                if (mapInstance) {
-                    mapInstance.remove();
-                    mapInstance = null;
+            // Variabel global untuk menyimpan instance peta dan marker
+            let map = null;
+            let markers = [];
+            
+            // Fungsi untuk inisialisasi peta
+            function initMap() {
+                // Hapus peta sebelumnya jika ada
+                if (map) {
+                    map.remove();
                 }
                 
-                // Buat instance peta baru
-                mapInstance = L.map('map-container').setView([-2.5489, 118.0149], 5);
+                // Inisialisasi peta baru
+                map = L.map('map-container').setView([-2.5489, 118.0149], 5);
                 
                 // Tambahkan layer tile
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                }).addTo(mapInstance);
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
                 
-                // Tambahkan markers
+                // Reset array marker
+                markers = [];
+                
+                // Tambahkan marker untuk setiap lokasi
+                const locations = @json($dcLocations);
+                addMarkers(locations);
+            }
+            
+            // Fungsi untuk menambahkan marker ke peta
+            function addMarkers(locations) {
+                // Hapus semua marker yang ada
+                markers.forEach(marker => map.removeLayer(marker));
+                markers = [];
+                
+                // Tambahkan marker baru
                 locations.forEach(location => {
-                    const markerColor = location.type === 'Alfamart' ? 'green' : 'blue';
+                    // Buat icon berdasarkan tipe
+                    const iconUrl = location.type === 'Alfamart' ? 
+                        'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png' : 
+                        'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png';
                     
-                    L.marker([location.lat, location.lng]).addTo(mapInstance)
-                      .bindPopup(`<b>${location.name}</b><br>Tipe: ${location.type}<br>Remote: ${location.remote}`);
+                    const icon = L.icon({
+                        iconUrl: iconUrl,
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    });
+                    
+                    // Buat dan tambahkan marker
+                    const marker = L.marker([location.lat, location.lng], { icon: icon })
+                        .bindPopup(`
+                            <b>${location.name}</b><br>
+                            Tipe: ${location.type}<br>
+                            Remote: ${location.remote}
+                        `);
+                    
+                    marker.addTo(map);
+                    markers.push(marker);
                 });
             }
-        
-            // Event listener untuk livewire - HANYA SATU
-            document.addEventListener('livewire:initialized', () => {
-                // Inisialisasi peta ketika komponen dimuat
-                initMap(@json($dcLocations));
-                
-                // Re-inisialisasi peta ketika komponen diperbarui
-                Livewire.hook('morph.updated', ({ el }) => {
-                    // Pastikan hanya menginisialisasi ulang jika komponen memiliki map-container
-                    if (el.querySelector('#map-container')) {
-                        initMap(@json($dcLocations));
-                    }
+            
+            // Inisialisasi peta saat dokumen siap
+            document.addEventListener('DOMContentLoaded', initMap);
+            
+            // Refresh peta saat komponen Livewire di-render ulang
+            document.addEventListener('livewire:load', function() {
+                Livewire.on('refreshMap', function() {
+                    // Setelah komponen diperbarui, inisialisasi peta lagi
+                    setTimeout(initMap, 100);
                 });
             });
         </script>

@@ -16,6 +16,17 @@ class AlfaLawsonDCMapWidget extends Widget
     public string $selectedFilter = 'Semua';
     public string $searchTerm = '';
     
+    public function filterByType(string $type): void
+{
+    $this->selectedFilter = $type;
+    $this->dispatch('refreshMap');
+}
+
+public function updatedSearchTerm(): void
+{
+    $this->dispatch('refreshMap');
+}
+    
     public function getDcLocations(): array
     {
         $locations = $this->getAllDcLocations();
@@ -29,7 +40,7 @@ class AlfaLawsonDCMapWidget extends Widget
             $locations = array_filter($locations, function($loc) use ($searchTerm) {
                 return str_contains(strtolower($loc['name']), $searchTerm) || 
                        str_contains(strtolower($loc['type']), $searchTerm) ||
-                       str_contains(strtolower($loc['remote']), $searchTerm);
+                       str_contains((string)$loc['remote'], $searchTerm);
             });
         }
         
@@ -75,11 +86,6 @@ class AlfaLawsonDCMapWidget extends Widget
                 'lng' => 119.4327,
             ],
         ];
-    }
-    
-    public function filterByType(string $type): void
-    {
-        $this->selectedFilter = $type;
     }
     
     public function render(): View

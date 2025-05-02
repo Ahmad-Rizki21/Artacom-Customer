@@ -1,0 +1,124 @@
+<x-filament::section>
+    <div>
+        <h2 class="text-xl font-bold mb-4">Sebaran Remote DC di Indonesia</h2>
+        <p class="text-sm text-gray-500 mb-4">
+            Lokasi distribution Remote Alfamart dan Lawson PT. Artacomindo Jejaring Nusa
+        </p>
+        
+        {{-- Filter buttons --}}
+        <div class="flex flex-wrap gap-2 mb-4">
+            <x-filament::button
+                type="button"
+                :color="$selectedFilter === 'Semua' ? 'primary' : 'secondary'"
+                wire:click="filterByType('Semua')"
+            >
+                Semua
+            </x-filament::button>
+            
+            <x-filament::button
+                type="button"
+                :color="$selectedFilter === 'Alfamart' ? 'primary' : 'secondary'"
+                wire:click="filterByType('Alfamart')"
+            >
+                Alfamart
+            </x-filament::button>
+            
+            <x-filament::button
+                type="button"
+                :color="$selectedFilter === 'Lawson' ? 'primary' : 'secondary'"
+                wire:click="filterByType('Lawson')"
+            >
+                Lawson
+            </x-filament::button>
+        </div>
+        
+        {{-- Search box --}}
+        <div class="mb-4">
+            <x-filament::input.wrapper>
+                <x-filament::input
+                    type="search"
+                    wire:model.live.debounce.300ms="searchTerm"
+                    placeholder="Cari DC..."
+                />
+            </x-filament::input.wrapper>
+        </div>
+        
+        {{-- Map container --}}
+        <div id="map-container" class="w-full h-96 rounded-xl mb-4 shadow-sm border border-gray-200"></div>
+        
+        {{-- Map legend --}}
+        <div class="flex items-center gap-4 mb-4 p-2 bg-gray-50 rounded-lg">
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-green-500"></div>
+                <span class="text-sm font-medium">Alfamart</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-blue-500"></div>
+                <span class="text-sm font-medium">Lawson</span>
+            </div>
+        </div>
+        
+        {{-- Data table --}}
+        <div class="overflow-x-auto">
+            <table class="table-auto w-full border border-gray-200">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="px-4 py-2">Nama DC</th>
+                        <th class="px-4 py-2">Tipe</th>
+                        <th class="px-4 py-2">Remote</th>
+                        <th class="px-4 py-2">Latitude/Longitude</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($dcLocations as $location)
+                        <tr>
+                            <td class="border px-4 py-2">{{ $location['name'] }}</td>
+                            <td class="border px-4 py-2">
+                                <span class="px-2 py-1 text-white rounded-full" style="background-color: {{ $location['type'] === 'Alfamart' ? '#10b981' : '#3b82f6' }}">
+                                    {{ $location['type'] }}
+                                </span>
+                            </td>
+                            <td class="border px-4 py-2">{{ $location['remote'] }}</td>
+                            <td class="border px-4 py-2">{{ $location['lat'] }}, {{ $location['lng'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    @pushOnce('scripts')
+        {{-- Include Leaflet CSS --}}
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+        
+        {{-- Include Leaflet JS --}}
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    @endPushOnce
+    
+    <script>
+        // Initialize map when the component is mounted
+        document.addEventListener('livewire:initialized', () => {
+            initMap(@json($dcLocations));
+            
+            // Re-initialize map when the component is updated
+            Livewire.hook('morph.updated', ({ el }) => {
+                if (el.id === 'map-container') {
+                    initMap(@json($dcLocations));
+                }
+            });
+        });
+        
+        function initMap(locations) {
+            const map = L.map('map-container').setView([-2.5489, 118.0149], 5); // Indonesia center
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            
+            // Add markers
+            locations.forEach(location => {
+                L.marker([location.lat, location.lng]).addTo(map)
+                  .bindPopup(`<b>${location.name}</b><br>${location.type}`);
+            });
+        }
+    </script>
+</x-filament::section>

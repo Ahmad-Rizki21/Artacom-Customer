@@ -1,0 +1,28 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/forms": "^0.5.10",
+        "@tailwindcss/typography": "^0.5.16",
+        "@tailwindcss/vite": "^4.0.0",
+        "@vitejs/plugin-react": "^4.4.1",
+        "autoprefixer": "^10.4.21",
+        "axios": "^1.8.2",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^1.2.0",
+        "postcss": "^8.5.3",
+        "tailwindcss": "^4.1.4",
+        "vite": "^5.2.0"
+    },
+    "dependencies": {
+        "leaflet": "^1.9.4",
+        "leaflet.markercluster": "^1.5.3",
+        "react": "^19.0.0-rc.1",
+        "react-dom": "^19.0.0-rc.1",
+        "react-leaflet": "^5.0.0-rc.2"
+    }
+}

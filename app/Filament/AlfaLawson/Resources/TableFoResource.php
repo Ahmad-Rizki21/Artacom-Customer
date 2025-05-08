@@ -1,0 +1,235 @@
+<?php
+
+namespace App\Filament\AlfaLawson\Resources;
+
+use App\Filament\AlfaLawson\Resources\TableFoResource\Pages;
+use App\Models\AlfaLawson\TableFo;
+use App\Models\AlfaLawson\TableRemote;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+
+class TableFoResource extends Resource
+{
+    protected static ?string $model = TableFo::class;
+    protected static ?string $navigationIcon = 'heroicon-o-signal';
+    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?int $navigationSort = 2;
+    protected static ?string $modelLabel = 'Fiber Optic';
+    protected static ?string $pluralModelLabel = 'Fiber Optic Connections';
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Card::make()
+                    ->schema([
+                        Forms\Components\Section::make('Fiber Optic Connection Details')
+                            ->description('Manage fiber optic connection information for specific locations.')
+                            ->icon('heroicon-o-signal')
+                            ->schema([
+                                Forms\Components\TextInput::make('CID')
+                                    ->label('Connection ID')
+                                    ->required()
+                                    ->maxLength(32)
+                                    ->placeholder('Enter Connection ID')
+                                    ->prefixIcon('heroicon-o-identification')
+                                    ->prefixIconColor('primary')
+                                    ->autofocus()
+                                    ->reactive()
+                                    ->helperText('Unique identifier for the fiber optic connection.')
+                                    ->validationMessages([
+                                        'required' => 'Connection ID is required.',
+                                        'max' => 'Connection ID cannot exceed 32 characters.',
+                                    ])
+                                    ->extraAttributes(['class' => 'text-lg'])
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Grid::make()
+                                    ->schema([
+                                        Forms\Components\TextInput::make('Provider')
+                                            ->label('Provider')
+                                            ->required()
+                                            ->placeholder('Enter Provider')
+                                            ->prefixIcon('heroicon-o-building-office')
+                                            ->prefixIconColor('primary')
+                                            ->helperText('E.g., ICON+, Telkom, Lintasarta.')
+                                            ->validationMessages([
+                                                'required' => 'Provider is required.',
+                                            ])
+                                            ->extraAttributes(['class' => 'text-lg']),
+
+                                        Forms\Components\TextInput::make('Register_Name')
+                                            ->label('Register Name')
+                                            ->maxLength(32)
+                                            ->placeholder('Enter Register Name')
+                                            ->prefixIcon('heroicon-o-user')
+                                            ->prefixIconColor('primary')
+                                            ->helperText('Name associated with the connection.')
+                                            ->validationMessages([
+                                                'max' => 'Register Name cannot exceed 32 characters.',
+                                            ])
+                                            ->extraAttributes(['class' => 'text-lg']),
+                                            
+                                    ])
+                                    ->columns([
+                                        'sm' => 1,
+                                        'lg' => 2,
+                                    ]),
+
+                                Forms\Components\Select::make('Site_ID')
+                                    ->label('Location')
+                                    ->relationship(
+                                        'remote',
+                                        'Site_ID',
+                                        fn (Builder $query) => $query->orderBy('DC')
+                                    )
+                                    ->getOptionLabelFromRecordUsing(fn (TableRemote $record) =>
+                                        "[{$record->DC}] {$record->Site_ID} - {$record->Nama_Toko}"
+                                    )
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->native(false)
+                                    ->prefixIcon('heroicon-o-building-storefront')
+                                    ->prefixIconColor('primary')
+                                    ->searchPrompt('Search for a location...')
+                                    ->noSearchResultsMessage('No locations found.')
+                                    ->loadingMessage('Loading locations...')
+                                    ->helperText('Select the store location for this connection.')
+                                    ->validationMessages([
+                                        'required' => 'Location is required.',
+                                    ])
+                                    ->extraAttributes(['class' => 'text-lg'])
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Select::make('Status')
+                                    ->label('Status')
+                                    ->options([
+                                        'Active' => 'Active',
+                                        'Dismantle' => 'Dismantle',
+                                        'Suspend' => 'Suspend',
+                                        'Not Active' => 'Not Active',
+                                    ])
+                                    ->default('Active')
+                                    ->required()
+                                    ->native(false)
+                                    ->prefixIcon('heroicon-o-signal')
+                                    ->prefixIconColor('primary')
+                                    ->helperText('Current status of the fiber optic connection.')
+                                    ->validationMessages([
+                                        'required' => 'Status is required.',
+                                    ])
+                                    ->extraAttributes(['class' => 'text-lg'])
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns([
+                                'sm' => 1,
+                                'lg' => 2,
+                            ]),
+                    ])
+                    ->extraAttributes(['class' => 'p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg']),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('CID')
+                    ->label('Connection ID')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->copyMessage('Connection BUD copied')
+                    ->icon('heroicon-o-identification'),
+
+                Tables\Columns\TextColumn::make('Provider')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-building-office'),
+
+                Tables\Columns\TextColumn::make('remote.Nama_Toko')
+                    ->label('Location')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-building-storefront'),
+
+                Tables\Columns\TextColumn::make('remote.DC')
+                    ->label('Distribution Center')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-map-pin'),
+
+                Tables\Columns\BadgeColumn::make('Status')
+                    ->colors([
+                        'success' => 'Active',
+                        'danger' => 'Dismantle',
+                        'warning' => 'Suspend',
+                        'gray' => 'Not Active',
+                    ]),
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->filters([
+                Tables\Filters\SelectFilter::make('Status')
+                    ->options([
+                        'Active' => 'Active',
+                        'Dismantle' => 'Dismantle',
+                        'Suspend' => 'Suspend',
+                        'Not Active' => 'Not Active',
+                    ])
+                    ->indicator('Status'),
+
+                Tables\Filters\SelectFilter::make('Provider')
+                    ->options([
+                        'ICON+' => 'ICON+',
+                        'Telkom' => 'Telkom',
+                        'Lintasarta' => 'Lintasarta',
+                        'XL' => 'XL',
+                        'Indosat' => 'Indosat',
+                    ])
+                    ->indicator('Provider'),
+
+                Tables\Filters\SelectFilter::make('DC')
+                    ->relationship('remote', 'DC')
+                    ->indicator('Distribution Center'),
+            ])
+            ->filtersFormColumns(3)
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->icon('heroicon-o-pencil-square')
+                    ->modalWidth('lg')
+                    ->successNotification(
+                        \Filament\Notifications\Notification::make()
+                            ->success()
+                            ->title('FO Connection Updated')
+                            ->body('The fiber optic connection has been updated successfully.')
+                            ->duration(5000)
+                    ),
+                Tables\Actions\DeleteAction::make()
+                    ->icon('heroicon-o-trash'),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListTableFos::route('/'),
+            'create' => Pages\CreateTableFo::route('/create'),
+            'edit' => Pages\EditTableFo::route('/{record}/edit'),
+        ];
+    }
+}

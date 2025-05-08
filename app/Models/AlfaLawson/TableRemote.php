@@ -4,6 +4,7 @@ namespace App\Models\AlfaLawson;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\AlfaLawson\TableSimcard;
 
 class TableRemote extends Model
 {
@@ -35,11 +36,15 @@ class TableRemote extends Model
     // {
     //     return $this->hasMany(TableSimcard::class, 'Site_ID', 'Site_ID');
     // }
+    public function simcards()
+    {
+        return $this->hasMany(TableSimcard::class, 'Site_ID', 'Site_ID');
+    }
 
-    // public function fo(): HasMany
-    // {
-    //     return $this->hasMany(TableFo::class, 'Site_ID', 'Site_ID');
-    // }
+    public function fo(): HasMany
+    {
+        return $this->hasMany(TableFo::class, 'Site_ID', 'Site_ID');
+    }
 
     // public function peplink(): HasMany
     // {

@@ -16,6 +16,7 @@ class TableRemoteResource extends Resource
 {
     protected static ?string $model = TableRemote::class;
     protected static ?string $navigationIcon = 'heroicon-o-server';
+    protected static ?string $navigationLabel = 'Remote';
     protected static ?string $navigationGroup = 'Network Management';
     protected static ?int $navigationSort = 1;
 
@@ -115,66 +116,88 @@ class TableRemoteResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('Site_ID')
-                    ->label('Site ID')
-                    ->searchable()
-                    ->sortable()
-                    ->copyable()
-                    ->tooltip('Click to copy Site ID')
-                    ->weight(FontWeight::Bold),
+        ->columns([
+            Tables\Columns\TextColumn::make('Site_ID')
+                ->label('Site ID')
+                ->searchable()
+                ->sortable()
+                ->copyable()
+                ->tooltip('Click to copy Site ID')
+                ->weight(FontWeight::Bold)
+                ->icon('heroicon-o-building-library'),
 
-                Tables\Columns\TextColumn::make('Nama_Toko')
-                    ->label('Nama Toko')
-                    ->searchable()
-                    ->sortable(),
+            Tables\Columns\TextColumn::make('Nama_Toko')
+                ->label('Nama Toko')
+                ->searchable()
+                ->sortable()
+                ->icon('heroicon-o-shopping-bag'),
 
-                Tables\Columns\TextColumn::make('DC')
-                    ->label('Distribution Center')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        // 'DC1' => 'success',
-                        // 'DC2' => 'warning',
-                        // 'DC3' => 'info',
-                        default => 'success',
-                    }),
+            Tables\Columns\TextColumn::make('DC')
+                ->label('Distribution Center')
+                ->badge()
+                ->icon('heroicon-o-map-pin')
+                ->color(fn (string $state): string => match ($state) {
+                    'BEKASI' => 'success',
+                    'MARUNDA' => 'warning',
+                    'SENTUL' => 'info',
+                    default => 'gray',
+                }),
 
-                Tables\Columns\TextColumn::make('IP_Address')
-                    ->label('IP Address')
-                    ->searchable()
-                    ->copyable()
-                    ->tooltip('Click to copy IP Address'),
+            Tables\Columns\TextColumn::make('IP_Address')
+                ->label('IP Address')
+                ->searchable()
+                ->copyable()
+                ->tooltip('Click to copy IP Address')
+                ->icon('heroicon-o-globe-alt')
+                ->color('primary'),
 
-                Tables\Columns\TextColumn::make('Vlan')
-                    ->label('VLAN')
-                    ->badge()
-                    ->alignCenter(),
+            Tables\Columns\TextColumn::make('Vlan')
+                ->label('VLAN')
+                ->badge()
+                ->icon('heroicon-o-squares-2x2')
+                ->color('warning')
+                ->alignCenter(),
 
-                Tables\Columns\TextColumn::make('Controller')
-                    ->label('Controller')
-                    ->searchable()
-                    ->sortable(),
+            Tables\Columns\TextColumn::make('Controller')
+                ->label('Controller')
+                ->searchable()
+                ->sortable()
+                ->icon('heroicon-o-cpu-chip'),
 
-                Tables\Columns\TextColumn::make('Link')
-                    ->label('Connection Type')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'FO' => 'success',
-                        'GSM' => 'info',
-                        'DUAL-GSM' => 'warning',
-                        default => 'gray',
-                    }),
+            Tables\Columns\TextColumn::make('Link')
+                ->label('Connection Type')
+                ->badge()
+                ->icon('heroicon-o-signal')
+                ->color(fn (string $state): string => match ($state) {
+                    'FO-GSM' => 'success',
+                    'SINGLE-GSM' => 'info',
+                    'DUAL-GSM' => 'warning',
+                    default => 'gray',
+                }),
 
-                Tables\Columns\TextColumn::make('Status')
-                    ->label('Status')
-                    ->badge(),
-                    
+            Tables\Columns\TextColumn::make('Status')
+                ->label('Status')
+                ->badge()
+                ->icon(fn (string $state): string => match ($state) {
+                    'OPERATIONAL' => 'heroicon-o-check-circle',
+                    'DOWN' => 'heroicon-o-x-circle',
+                    'MAINTENANCE' => 'heroicon-o-wrench',
+                    default => 'heroicon-o-question-mark-circle',
+                })
+                ->color(fn (string $state): string => match ($state) {
+                    'OPERATIONAL' => 'success',
+                    'DOWN' => 'danger',
+                    'MAINTENANCE' => 'warning',
+                    default => 'gray',
+                }),
 
-                Tables\Columns\TextColumn::make('Online_Date')
-                    ->label('Online Date')
-                    ->date('d M Y')
-                    ->sortable(),
-            ])
+            Tables\Columns\TextColumn::make('Online_Date')
+                ->label('Online Date')
+                ->date('d M Y')
+                ->sortable()
+                ->icon('heroicon-o-calendar')
+                ->color('success'),
+        ])
             ->defaultSort('Site_ID', 'asc')
             ->filters([
                 Tables\Filters\SelectFilter::make('DC')

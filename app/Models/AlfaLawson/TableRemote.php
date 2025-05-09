@@ -46,8 +46,8 @@ class TableRemote extends Model
         return $this->hasMany(TableFo::class, 'Site_ID', 'Site_ID');
     }
 
-    // public function peplink(): HasMany
-    // {
-    //     return $this->hasMany(TablePeplink::class, 'Site_ID', 'Site_ID');
-    // }
+    public function peplink(): HasMany
+    {
+        return $this->hasMany(TablePeplink::class, 'Site_ID', 'Site_ID');
+    }
 }

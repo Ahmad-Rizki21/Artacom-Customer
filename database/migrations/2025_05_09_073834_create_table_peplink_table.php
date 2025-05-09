@@ -22,7 +22,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Set SN as primary key
-            // $table->primary('SN');
+            $table->primary('SN');
 
             // Foreign key site_id
             $table->foreign('Site_ID')

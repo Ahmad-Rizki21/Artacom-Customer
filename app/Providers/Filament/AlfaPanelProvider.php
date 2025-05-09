@@ -50,7 +50,39 @@ class AlfaPanelProvider extends PanelProvider
                  () => view('components.login-branding')
             )
            
+            // ->navigationItems([
+            //     NavigationItem::make()
+            //         ->label('Panel Switcher')
+            //         ->icon('heroicon-o-squares-2x2')
+            //         ->url('/alfa')
+            //         ->sort(-1)
+            //         ->group('Panel Switcher')
+            //         ->childItems([
+            //             NavigationItem::make()
+            //                 ->label('ALFA LAWSON CUSTOMER')
+            //                 ->url('/alfa')
+            //                 ->icon('heroicon-o-check-circle')
+            //                 ->isActiveWhen(fn() => request()->is('alfa*')),
+            //             NavigationItem::make()
+            //                 ->label('FTTH CUSTOMER')
+            //                 ->url('/ftth')
+            //                 ->icon('heroicon-o-arrow-right-circle'),
+            //         ]),
+            // ]) 
+            ->navigationGroups([
+                'Panel Switcher',
+                'Network Management'
+            ])
             ->navigationItems([
+                // Dashboard
+                NavigationItem::make()
+                    ->label('Dashboard')
+                    ->icon('heroicon-o-home')
+                    ->url('/alfa')
+                    ->isActiveWhen(fn() => request()->is('alfa'))
+                    ->sort(-2),
+    
+                // Panel Switcher Group
                 NavigationItem::make()
                     ->label('Panel Switcher')
                     ->icon('heroicon-o-squares-2x2')
@@ -68,7 +100,33 @@ class AlfaPanelProvider extends PanelProvider
                             ->url('/ftth')
                             ->icon('heroicon-o-arrow-right-circle'),
                     ]),
-            ]) 
+    
+                // Network Management Group
+                NavigationItem::make()
+                    ->label('Remote')
+                    ->icon('heroicon-o-server')
+                    ->url('/alfa/remote')
+                    ->group('Network Management'),
+    
+                NavigationItem::make()
+                    ->label('Fiber Optic Connections')
+                    ->icon('heroicon-o-signal')
+                    ->url('/alfa/fiber-optic')
+                    ->group('Network Management'),
+    
+                NavigationItem::make()
+                    ->label('Peplink Device')
+                    ->icon('heroicon-o-server-stack')
+                    ->url('/alfa/peplink')
+                    ->isActiveWhen(fn() => request()->is('alfa/peplink*'))
+                    ->group('Network Management'),
+    
+                NavigationItem::make()
+                    ->label('SIM Card')
+                    ->icon('heroicon-o-credit-card')
+                    ->url('/alfa/sim-card')
+                    ->group('Network Management'),
+            ])
 
             // ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverResources(in: app_path('Filament/AlfaLawson/Resources'), for: 'App\\Filament\\AlfaLawson\\Resources')

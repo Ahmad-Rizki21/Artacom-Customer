@@ -25,6 +25,7 @@ class TableSimcard extends Model
         'Sim_Number',
         'Provider',
         'Site_ID',
+        'Informasi_Tambahan',
         'SN_Card',
         'Status',
     ];

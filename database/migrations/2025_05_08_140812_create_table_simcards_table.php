@@ -12,6 +12,7 @@ return new class extends Migration
             $table->string('Sim_Number', 16)->primary();
             $table->string('Provider', 16);
             $table->string('Site_ID', 16);
+            $table->text('Informasi_Tambahan');
             $table->string('SN_Card', 16);
             $table->string('Status', 16);
             $table->timestamps();

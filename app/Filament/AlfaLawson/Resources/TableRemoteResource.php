@@ -11,6 +11,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Support\Enums\FontWeight;
 use Filament\Notifications\Notification;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Tables\Columns\TextColumn;
 
 class TableRemoteResource extends Resource
 {
@@ -93,8 +95,8 @@ class TableRemoteResource extends Resource
                             ->label('Customer')
                             ->required()
                             ->options([
-                                'Alfa' => 'Alfamart',
-                                'Lawson' => 'Lawson',
+                                'ALFAMART' => 'ALFAMART',
+                                'LAWSON' => 'LAWSON',
                             ])
                             ->searchable()
                             ->helperText('Select the customer associated with this site.'),
@@ -116,127 +118,193 @@ class TableRemoteResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-        ->columns([
-            Tables\Columns\TextColumn::make('Site_ID')
-                ->label('Site ID')
-                ->searchable()
-                ->sortable()
-                ->copyable()
-                ->tooltip('Click to copy Site ID')
-                ->weight(FontWeight::Bold)
-                ->icon('heroicon-o-building-library'),
-
-            Tables\Columns\TextColumn::make('Nama_Toko')
-                ->label('Nama Toko')
-                ->searchable()
-                ->sortable()
-                ->icon('heroicon-o-shopping-bag'),
-
-            Tables\Columns\TextColumn::make('DC')
-                ->label('Distribution Center')
-                ->badge()
-                ->icon('heroicon-o-map-pin')
-                ->color(fn (string $state): string => match ($state) {
-                    'BEKASI' => 'success',
-                    'MARUNDA' => 'warning',
-                    'SENTUL' => 'info',
-                    default => 'gray',
-                }),
-
-            Tables\Columns\TextColumn::make('IP_Address')
-                ->label('IP Address')
-                ->searchable()
-                ->copyable()
-                ->tooltip('Click to copy IP Address')
-                ->icon('heroicon-o-globe-alt')
-                ->color('primary'),
-
-            Tables\Columns\TextColumn::make('Vlan')
-                ->label('VLAN')
-                ->badge()
-                ->icon('heroicon-o-squares-2x2')
-                ->color('warning')
-                ->alignCenter(),
-
-            Tables\Columns\TextColumn::make('Controller')
-                ->label('Controller')
-                ->searchable()
-                ->sortable()
-                ->icon('heroicon-o-cpu-chip'),
-
-            Tables\Columns\TextColumn::make('Link')
-                ->label('Connection Type')
-                ->badge()
-                ->icon('heroicon-o-signal')
-                ->color(fn (string $state): string => match ($state) {
-                    'FO-GSM' => 'success',
-                    'SINGLE-GSM' => 'info',
-                    'DUAL-GSM' => 'warning',
-                    default => 'gray',
-                }),
-
-            Tables\Columns\TextColumn::make('Status')
-                ->label('Status')
-                ->badge()
-                ->icon(fn (string $state): string => match ($state) {
-                    'OPERATIONAL' => 'heroicon-o-check-circle',
-                    'DOWN' => 'heroicon-o-x-circle',
-                    'MAINTENANCE' => 'heroicon-o-wrench',
-                    default => 'heroicon-o-question-mark-circle',
-                })
-                ->color(fn (string $state): string => match ($state) {
-                    'OPERATIONAL' => 'success',
-                    'DOWN' => 'danger',
-                    'MAINTENANCE' => 'warning',
-                    default => 'gray',
-                }),
-
-            Tables\Columns\TextColumn::make('Online_Date')
-                ->label('Online Date')
-                ->date('d M Y')
-                ->sortable()
-                ->icon('heroicon-o-calendar')
-                ->color('success'),
-        ])
+            ->description('Daftar semua Remote yang terdaftar di sistem.')
+            ->headerActions([
+                Tables\Actions\Action::make('manageColumns')
+                    ->label('Kelola Kolom')
+                    ->icon('heroicon-o-bars-3')
+                    ->color('gray')
+                    ->modalHeading('Pilih Kolom yang Ditampilkan')
+                    ->modalSubmitActionLabel('Simpan')
+                    ->modalCancelActionLabel('Batal')
+                    ->form([
+                        CheckboxList::make('visibleColumns')
+                            ->label('Pilih Kolom')
+                            ->options([
+                                'Site_ID' => 'Site ID',
+                                'Nama_Toko' => 'Nama Toko',
+                                'DC' => 'Distribution Center',
+                                'IP_Address' => 'IP Address',
+                                'Vlan' => 'VLAN',
+                                'Controller' => 'Controller',
+                                'Link' => 'Connection Type',
+                                'Status' => 'Status',
+                                'Online_Date' => 'Online Date',
+                                'Customer' => 'Customer',
+                                'Keterangan' => 'Remarks',
+                            ])
+                            ->default(function () {
+                                return array_keys([
+                                    'Site_ID' => 'Site ID',
+                                    'Nama_Toko' => 'Nama Toko',
+                                    'DC' => 'Distribution Center',
+                                    'IP_Address' => 'IP Address',
+                                    'Vlan' => 'VLAN',
+                                    'Controller' => 'Controller',
+                                    'Link' => 'Connection Type',
+                                    'Status' => 'Status',
+                                    'Online_Date' => 'Online Date',
+                                    'Customer' => 'Customer',
+                                    'Keterangan' => 'Remarks',
+                                ]);
+                            })
+                            ->columns(2)
+                            ->required(),
+                    ])
+                    ->action(function (array $data) {
+                        session()->put('visible_columns_remote', $data['visibleColumns']);
+                        Notification::make()
+                            ->title('Kolom diperbarui')
+                            ->success()
+                            ->send();
+                    })
+                    ->modalWidth('lg'),
+            ])
+            ->columns([
+                TextColumn::make('Site_ID')
+                    ->label('Site ID')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->tooltip('Click to copy Site ID')
+                    ->weight(FontWeight::Bold)
+                    ->icon('heroicon-o-building-library')
+                    ->toggleable(),
+            
+                TextColumn::make('Nama_Toko')
+                    ->label('Nama Toko')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-shopping-bag')
+                    ->toggleable(),
+            
+                TextColumn::make('DC')
+                    ->label('Distribution Center')
+                    ->badge()
+                    ->icon('heroicon-o-map-pin')
+                    ->color(fn (string $state): string => match ($state) {
+                        'BEKASI' => 'success',
+                        'MARUNDA' => 'warning',
+                        'SENTUL' => 'info',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
+            
+                TextColumn::make('IP_Address')
+                    ->label('IP Address')
+                    ->searchable()
+                    ->copyable()
+                    ->tooltip('Click to copy IP Address')
+                    ->icon('heroicon-o-globe-alt')
+                    ->color('primary')
+                    ->toggleable(),
+            
+                TextColumn::make('Vlan')
+                    ->label('VLAN')
+                    ->badge()
+                    ->icon('heroicon-o-squares-2x2')
+                    ->color('warning')
+                    ->alignCenter()
+                    ->toggleable(),
+            
+                TextColumn::make('Controller')
+                    ->label('Controller')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-cpu-chip')
+                    ->toggleable(),
+            
+                TextColumn::make('Link')
+                    ->label('Connection Type')
+                    ->badge()
+                    ->icon('heroicon-o-signal')
+                    ->color(fn (string $state): string => match ($state) {
+                        'FO-GSM' => 'success',
+                        'SINGLE-GSM' => 'info',
+                        'DUAL-GSM' => 'warning',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
+            
+                TextColumn::make('Status')
+                    ->label('Status')
+                    ->badge()
+                    ->icon(fn (string $state): string => match ($state) {
+                        'OPERATIONAL' => 'heroicon-o-check-circle',
+                        'DOWN' => 'heroicon-o-x-circle',
+                        'MAINTENANCE' => 'heroicon-o-wrench',
+                        default => 'heroicon-o-question-mark-circle',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'OPERATIONAL' => 'success',
+                        'DOWN' => 'danger',
+                        'MAINTENANCE' => 'warning',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
+            
+                TextColumn::make('Online_Date')
+                    ->label('Online Date')
+                    ->date('d M Y')
+                    ->sortable()
+                    ->icon('heroicon-o-calendar')
+                    ->color('success')
+                    ->toggleable(),
+            
+                TextColumn::make('Customer')
+                    ->label('Customer')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-user')
+                    ->toggleable(),
+            
+                TextColumn::make('Keterangan')
+                    ->label('Remarks')
+                    ->searchable()
+                    ->limit(50)
+                    ->tooltip(fn ($record) => $record->Keterangan)
+                    ->default('-')
+                    ->icon('heroicon-o-document-text')
+                    ->toggleable(),
+            ])
             ->defaultSort('Site_ID', 'asc')
             ->filters([
                 Tables\Filters\SelectFilter::make('DC')
-                    ->label('Distribution Center'),
-                    // ->options([
-                    //     'DC1' => 'Marunda',
-                    //     'DC2' => 'Cikarang',
-                    //     'DC3' => 'Sentul',
-                    // ]),
+                    ->label('Distribution Center')
+                    ->options([
+                        'BEKASI' => 'Bekasi',
+                        'MARUNDA' => 'Marunda',
+                        'SENTUL' => 'Sentul',
+                    ]),
 
                 Tables\Filters\SelectFilter::make('Status')
                     ->label('Status')
                     ->options([
-                        '1' => 'Active',
-                        '0' => 'Inactive',
+                        'OPERATIONAL' => 'Operational',
+                        'DOWN' => 'Down',
+                        'MAINTENANCE' => 'Maintenance',
                     ]),
 
                 Tables\Filters\SelectFilter::make('Link')
                     ->label('Connection Type')
                     ->options([
-                        'FO' => 'Fiber Optic',
-                        'GSM' => 'Sim Card',
-                        'DUAL-GSM'=> 'Dual Sim Card',
+                        'FO-GSM' => 'FO-GSM',
+                        'SINGLE-GSM' => 'Single-GSM',
+                        'DUAL-GSM' => 'Dual-GSM',
                     ]),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                // Tables\Actions\DeleteAction::make()
-                //     ->label('Delete Remote')
-                //     ->icon('heroicon-o-trash')
-                //     ->color('danger')
-                //     ->requiresConfirmation()
-                //     ->action(function (Table $table, $record) {
-                //         $record->delete();
-                //         Notification::make()
-                //             ->title('Remote Connection Deleted')
-                //             ->success()
-                //             ->send();
-                //     }),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
@@ -249,7 +317,7 @@ class TableRemoteResource extends Resource
         return [
             'index' => Pages\ListTableRemotes::route('/'),
             'create' => Pages\CreateTableRemote::route('/create'),
-            'view' => Pages\ViewTableRemote::route('/{record}'),  // Tambahkan ini
+            'view' => Pages\ViewTableRemote::route('/{record}'),
             'edit' => Pages\EditTableRemote::route('/{record}/edit'),
         ];
     }

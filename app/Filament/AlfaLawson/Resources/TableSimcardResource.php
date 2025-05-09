@@ -4,13 +4,15 @@ namespace App\Filament\AlfaLawson\Resources;
 
 use App\Filament\AlfaLawson\Resources\TableSimcardResource\Pages;
 use App\Models\AlfaLawson\TableSimcard;
-use App\Models\AlfaLawson\TableRemote;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Notifications\Notification;
+use Filament\Forms\Components\CheckboxList;
 
 class TableSimcardResource extends Resource
 {
@@ -34,108 +36,125 @@ class TableSimcardResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Card::make()
+                Forms\Components\Group::make()
                     ->schema([
                         Forms\Components\Section::make('Informasi SIM Card')
-                            ->description('Masukkan detail SIM Card untuk lokasi tertentu.')
+                            ->description('Masukkan detail SIM Card untuk pengelolaan jaringan.')
                             ->icon('heroicon-o-information-circle')
-                            ->schema([
-                                Forms\Components\TextInput::make('Sim_Number')
-                                    ->label('Nomor SIM')
-                                    ->required()
-                                    ->maxLength(16)
-                                    ->unique(TableSimcard::class, 'Sim_Number', ignoreRecord: true)
-                                    ->placeholder('Contoh: 0812345678901234')
-                                    ->helperText('Nomor SIM harus unik dan maksimal 16 karakter.')
-                                    ->prefixIcon('heroicon-o-phone')
-                                    ->reactive()
-                                    ->autofocus()
-                                    ->validationMessages([
-                                        'unique' => 'Nomor SIM sudah terdaftar.',
-                                        'max' => 'Nomor SIM tidak boleh lebih dari 16 karakter.',
-                                    ]),
-
-                                Forms\Components\Select::make('Provider')
-                                    ->label('Provider')
-                                    ->options([
-                                        'Telkomsel' => 'Telkomsel',
-                                        'Indosat' => 'Indosat',
-                                        'XL' => 'XL',
-                                        'Axis' => 'Axis',
-                                        'Tri' => 'Tri',
-                                    ])
-                                    ->searchable()
-                                    ->placeholder('Pilih provider')
-                                    ->required()
-                                    ->prefixIcon('heroicon-o-globe-alt')
-                                    ->native(false),
-
-                                Forms\Components\Select::make('Site_ID')
-                                    ->label('Lokasi')
-                                    ->relationship(
-                                        'remote',
-                                        'Site_ID',
-                                        fn (Builder $query) => $query->orderBy('DC')
-                                    )
-                                    ->getOptionLabelFromRecordUsing(fn (TableRemote $record) =>
-                                        "[{$record->DC}] {$record->Site_ID} - {$record->Nama_Toko}"
-                                    )
-                                    ->searchable()
-                                    ->preload()
-                                    ->required()
-                                    ->native(false)
-                                    ->prefixIcon('heroicon-m-building-storefront')
-                                    ->columnSpanFull()
-                                    ->helperText('Pilih lokasi yang terkait dengan SIM Card ini.'),
-
-                                // Forms\Components\TextInput::make('SN_Card')
-                                //     ->label('Nomor Seri Kartu (SN Card)')
-                                //     ->maxLength(16)
-                                //     ->placeholder('Contoh: SN1234567890')
-                                //     ->helperText('Masukkan nomor seri kartu jika tersedia.')
-                                //     ->prefixIcon('heroicon-o-identification'),
-                                Forms\Components\TextInput::make('SN_Card')
-                                ->label('Nomor Seri Kartu (SN Card)')
-                                ->maxLength(25)
-                                ->placeholder('Tidak ada SN') // Placeholder sebagai panduan
-                                ->default('Tidak ada SN') // Default value jika tidak diisi
-                                ->helperText('Masukkan nomor seri kartu jika tersedia.')
-                                ->prefixIcon('heroicon-o-identification'),
-
-                                Forms\Components\Select::make('Status')
-                                    ->label('Status')
-                                    ->options([
-                                        'active' => 'Aktif',
-                                        'inactive' => 'Tidak Aktif',
-                                    ])
-                                    ->default('active')
-                                    ->prefixIcon('heroicon-o-power')
-                                    ->native(false),
+                            ->headerActions([
+                                Forms\Components\Actions\Action::make('clear')
+                                    ->label('Reset Form')
+                                    ->icon('heroicon-o-arrow-path')
+                                    ->color('gray')
+                                    ->action(fn (Forms\Components\Component $component) => $component->getContainer()->reset()),
                             ])
-                            ->columns([
-                                'sm' => 1,
-                                'lg' => 2,
-                            ]),
+                            ->schema([
+                                Forms\Components\Grid::make()
+                                    ->schema([
+                                        Forms\Components\TextInput::make('Sim_Number')
+                                            ->label('Nomor SIM')
+                                            ->required()
+                                            ->maxLength(16)
+                                            ->unique(TableSimcard::class, 'Sim_Number', ignoreRecord: true)
+                                            ->placeholder('Contoh: 0812345678901234')
+                                            ->helperText('Nomor SIM harus unik dan maksimal 16 karakter.')
+                                            ->prefixIcon('heroicon-o-phone')
+                                            ->autofocus()
+                                            ->validationMessages([
+                                                'unique' => 'Nomor SIM sudah terdaftar.',
+                                                'max' => 'Nomor SIM tidak boleh lebih dari 16 karakter.',
+                                            ])
+                                            ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors'])
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Select::make('Provider')
+                                            ->label('Provider')
+                                            ->options([
+                                                'Telkomsel' => 'Telkomsel',
+                                                'Indosat' => 'Indosat',
+                                                'XL' => 'XL',
+                                                'Axis' => 'Axis',
+                                                'Tri' => 'Tri',
+                                            ])
+                                            ->required()
+                                            ->searchable()
+                                            ->placeholder('Pilih provider')
+                                            ->prefixIcon('heroicon-o-globe-alt')
+                                            ->native(false)
+                                            ->extraAttributes(['class' => 'bg-indigo-50'])
+                                            ->columnSpan(1),
+
+                                        Forms\Components\TextInput::make('Site_ID')
+                                            ->label('Lokasi Toko')
+                                            ->required()
+                                            ->placeholder('Masukkan kode toko atau lokasi')
+                                            ->prefixIcon('heroicon-m-building-storefront')
+                                            ->helperText('Gunakan kode toko atau deskripsi lokasi kartu.')
+                                            ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors'])
+                                            ->columnSpan(2),
+
+                                        Forms\Components\TextInput::make('SN_Card')
+                                            ->label('Nomor Seri Kartu (SN Card)')
+                                            ->maxLength(25)
+                                            ->placeholder('Tidak ada SN')
+                                            ->default('Tidak ada SN')
+                                            ->helperText('Masukkan nomor seri kartu jika tersedia.')
+                                            ->prefixIcon('heroicon-o-identification')
+                                            ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors'])
+                                            ->columnSpan(1),
+
+                                        Forms\Components\Select::make('Status')
+                                            ->label('Status')
+                                            ->options([
+                                                'active' => 'Aktif',
+                                                'inactive' => 'Tidak Aktif',
+                                            ])
+                                            ->default('active')
+                                            ->prefixIcon('heroicon-o-power')
+                                            ->native(false)
+                                            ->extraAttributes(['class' => 'bg-indigo-50'])
+                                            ->columnSpan(1),
+                                    ])
+                                    ->columns(2),
+                            ])
+                            ->extraAttributes(['class' => 'bg-white shadow-xl rounded-xl p-6 border border-gray-100']),
                     ])
-                    ->extraAttributes(['class' => 'shadow-lg']),
-            ]);
+                    ->columnSpanFull(),
+
+                Forms\Components\Section::make('Informasi Tambahan')
+                    ->collapsible()
+                    ->icon('heroicon-o-plus-circle')
+                    ->schema([
+                        Forms\Components\Textarea::make('Informasi_Tambahan')
+                            ->label('Catatan')
+                            ->placeholder('Tambahkan catatan terkait SIM Card ini...')
+                            ->rows(4)
+                            ->helperText('Gunakan untuk mencatat informasi tambahan seperti tanggal aktivasi atau detail lainnya.')
+                            ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors']),
+                    ])
+                    ->extraAttributes(['class' => 'bg-white shadow-xl rounded-xl p-6 border border-gray-100 mt-4']),
+            ])
+            ->columns(1);
     }
 
     public static function table(Table $table): Table
     {
+        
         return $table
-            ->description('Daftar semua SIM Card yang terdaftar di sistem.')
+        ->description('Daftar semua SIM Card yang terdaftar di sistem.')
             ->columns([
-                Tables\Columns\TextColumn::make('Sim_Number')
+                
+                TextColumn::make('Sim_Number')
                     ->label('Nomor SIM')
                     ->searchable()
                     ->sortable()
                     ->icon('heroicon-o-phone')
                     ->tooltip(fn ($record) => "Nomor: {$record->Sim_Number}")
                     ->wrap()
-                    ->extraAttributes(['class' => 'font-mono']),
-
-                Tables\Columns\TextColumn::make('Provider')
+                    ->extraAttributes(['class' => 'font-mono'])
+                    ->toggleable(),
+            
+                TextColumn::make('Provider')
                     ->label('Provider')
                     ->searchable()
                     ->sortable()
@@ -154,26 +173,30 @@ class TableSimcardResource extends Resource
                         'Axis' => 'success',
                         'Tri' => 'primary',
                         default => 'gray',
-                    }),
-
-                Tables\Columns\TextColumn::make('remote.Nama_Toko')
-                    ->label('Lokasi')
+                    })
+                    ->toggleable(),
+            
+                TextColumn::make('Site_ID')
+                    ->label('Lokasi Toko')
                     ->searchable()
                     ->sortable()
-                    ->getStateUsing(fn ($record) => "[{$record->remote?->DC}] {$record->Site_ID} - {$record->remote?->Nama_Toko}")
                     ->wrap()
-                    ->tooltip(fn ($record) => $record->remote ? "Toko: {$record->remote->Nama_Toko}" : 'Tidak ada lokasi')
-                    ->icon('heroicon-m-building-storefront'),
-
-                    Tables\Columns\TextColumn::make('SN_Card')
+                    ->tooltip(fn ($record) => $record->remote
+                        ? "Toko: {$record->remote->Nama_Toko} " . ($record->Lokasi_Tambahan ? "- {$record->Lokasi_Tambahan}" : '')
+                        : 'Tidak ada lokasi')
+                    ->icon('heroicon-m-building-storefront')
+                    ->toggleable(),
+            
+                TextColumn::make('SN_Card')
                     ->label('SN Card')
                     ->searchable()
                     ->sortable()
-                    ->default('Tidak ada SN') // Default value jika kosong
+                    ->default('Tidak ada SN')
                     ->icon('heroicon-o-identification')
-                    ->extraAttributes(['class' => 'font-mono']),
-
-                Tables\Columns\TextColumn::make('Status')
+                    ->extraAttributes(['class' => 'font-mono'])
+                    ->toggleable(),
+            
+                TextColumn::make('Status')
                     ->label('Status')
                     ->badge()
                     ->icon(fn (string $state): string => match ($state) {
@@ -185,7 +208,18 @@ class TableSimcardResource extends Resource
                         'active' => 'success',
                         'inactive' => 'danger',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
+            
+                TextColumn::make('Informasi_Tambahan')
+                    ->label('Catatan')
+                    ->searchable()
+                    ->sortable()
+                    ->limit(50)
+                    ->tooltip(fn ($record) => $record->Informasi_Tambahan)
+                    ->default('-')
+                    ->icon('heroicon-o-document-text')
+                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('Status')

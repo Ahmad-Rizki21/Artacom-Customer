@@ -13,6 +13,11 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Tables\Columns\TextColumn;
+use App\Filament\Exports\TableRemoteExporter;
+use App\Filament\Imports\TableRemoteImportImporter;
+use OpenSpout\Writer\XLSX\Writer;
+
+
 
 class TableRemoteResource extends Resource
 {
@@ -101,11 +106,15 @@ class TableRemoteResource extends Resource
                             ->searchable()
                             ->helperText('Select the customer associated with this site.'),
 
-                        Forms\Components\TextInput::make('Status')
+                        Forms\Components\Select::make('Status')
                             ->label('Status')
                             ->required()
-                            ->placeholder('Enter status code (e.g., Active)')
-                            ->helperText('Use numeric values to represent the status.'),
+                            ->options([
+                                'OPERATIONAL' => 'Operational',
+                            ])
+                            ->default('OPERATIONAL')
+                            ->disabled()
+                            ->helperText('Status is fixed to Operational for this table.'),
 
                         Forms\Components\Textarea::make('Keterangan')
                             ->label('Remarks')
@@ -118,58 +127,59 @@ class TableRemoteResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->description('Daftar semua Remote yang terdaftar di sistem.')
-            ->headerActions([
-                Tables\Actions\Action::make('manageColumns')
-                    ->label('Kelola Kolom')
-                    ->icon('heroicon-o-bars-3')
-                    ->color('gray')
-                    ->modalHeading('Pilih Kolom yang Ditampilkan')
-                    ->modalSubmitActionLabel('Simpan')
-                    ->modalCancelActionLabel('Batal')
-                    ->form([
-                        CheckboxList::make('visibleColumns')
-                            ->label('Pilih Kolom')
-                            ->options([
-                                'Site_ID' => 'Site ID',
-                                'Nama_Toko' => 'Nama Toko',
-                                'DC' => 'Distribution Center',
-                                'IP_Address' => 'IP Address',
-                                'Vlan' => 'VLAN',
-                                'Controller' => 'Controller',
-                                'Link' => 'Connection Type',
-                                'Status' => 'Status',
-                                'Online_Date' => 'Online Date',
-                                'Customer' => 'Customer',
-                                'Keterangan' => 'Remarks',
-                            ])
-                            ->default(function () {
-                                return array_keys([
-                                    'Site_ID' => 'Site ID',
-                                    'Nama_Toko' => 'Nama Toko',
-                                    'DC' => 'Distribution Center',
-                                    'IP_Address' => 'IP Address',
-                                    'Vlan' => 'VLAN',
-                                    'Controller' => 'Controller',
-                                    'Link' => 'Connection Type',
-                                    'Status' => 'Status',
-                                    'Online_Date' => 'Online Date',
-                                    'Customer' => 'Customer',
-                                    'Keterangan' => 'Remarks',
-                                ]);
-                            })
-                            ->columns(2)
-                            ->required(),
-                    ])
-                    ->action(function (array $data) {
-                        session()->put('visible_columns_remote', $data['visibleColumns']);
-                        Notification::make()
-                            ->title('Kolom diperbarui')
-                            ->success()
-                            ->send();
-                    })
-                    ->modalWidth('lg'),
-            ])
+            ->query(TableRemote::query()->where('Status', 'OPERATIONAL')) // Filter only OPERATIONAL records
+            ->description('Daftar semua Remote dengan status OPERATIONAL.')
+            // ->headerActions([
+            //     Tables\Actions\Action::make('manageColumns')
+            //         ->label('Kelola Kolom')
+            //         ->icon('heroicon-o-bars-3')
+            //         ->color('gray')
+            //         ->modalHeading('Pilih Kolom yang Ditampilkan')
+            //         ->modalSubmitActionLabel('Simpan')
+            //         ->modalCancelActionLabel('Batal')
+            //         ->form([
+            //             CheckboxList::make('visibleColumns')
+            //                 ->label('Pilih Kolom')
+            //                 ->options([
+            //                     'Site_ID' => 'Site ID',
+            //                     'Nama_Toko' => 'Nama Toko',
+            //                     'DC' => 'Distribution Center',
+            //                     'IP_Address' => 'IP Address',
+            //                     'Vlan' => 'VLAN',
+            //                     'Controller' => 'Controller',
+            //                     'Link' => 'Connection Type',
+            //                     'Status' => 'Status',
+            //                     'Online_Date' => 'Online Date',
+            //                     'Customer' => 'Customer',
+            //                     'Keterangan' => 'Remarks',
+            //                 ])
+            //                 ->default(function () {
+            //                     return array_keys([
+            //                         'Site_ID' => 'Site ID',
+            //                         'Nama_Toko' => 'Nama Toko',
+            //                         'DC' => 'Distribution Center',
+            //                         'IP_Address' => 'IP Address',
+            //                         'Vlan' => 'VLAN',
+            //                         'Controller' => 'Controller',
+            //                         'Link' => 'Connection Type',
+            //                         'Status' => 'Status',
+            //                         'Online_Date' => 'Online Date',
+            //                         'Customer' => 'Customer',
+            //                         'Keterangan' => 'Remarks',
+            //                     ]);
+            //                 })
+            //                 ->columns(2)
+            //                 ->required(),
+            //         ])
+            //         ->action(function (array $data) {
+            //             session()->put('visible_columns_remote', $data['visibleColumns']);
+            //             Notification::make()
+            //                 ->title('Kolom diperbarui')
+            //                 ->success()
+            //                 ->send();
+            //         })
+            //         ->modalWidth('lg'),
+            // ])
             ->columns([
                 TextColumn::make('Site_ID')
                     ->label('Site ID')
@@ -192,21 +202,23 @@ class TableRemoteResource extends Resource
                     ->label('Distribution Center')
                     ->badge()
                     ->icon('heroicon-o-map-pin')
-                    ->color(fn (string $state): string => match ($state) {
-                        'BEKASI' => 'success',
-                        'MARUNDA' => 'warning',
-                        'SENTUL' => 'info',
-                        default => 'gray',
-                    })
+                    // ->color(fn (string $state): string => match ($state) {
+                    //     'BEKASI' => 'success',
+                    //     'MARUNDA' => 'warning',
+                    //     'SENTUL' => 'info',
+                    //     default => 'gray',
+                    // })
                     ->toggleable(),
             
                 TextColumn::make('IP_Address')
                     ->label('IP Address')
                     ->searchable()
                     ->copyable()
-                    ->tooltip('Click to copy IP Address')
+                    ->tooltip('Click to copy IP Address or visit with port 8090')
                     ->icon('heroicon-o-globe-alt')
                     ->color('primary')
+                    ->formatStateUsing(fn ($state) => "<a href='http://{$state}:8090' target='_blank'>{$state}</a>")
+                    ->html()
                     ->toggleable(),
             
                 TextColumn::make('Vlan')
@@ -232,6 +244,7 @@ class TableRemoteResource extends Resource
                         'FO-GSM' => 'success',
                         'SINGLE-GSM' => 'info',
                         'DUAL-GSM' => 'warning',
+                        'FO'=> 'danger',
                         default => 'gray',
                     })
                     ->toggleable(),
@@ -239,18 +252,8 @@ class TableRemoteResource extends Resource
                 TextColumn::make('Status')
                     ->label('Status')
                     ->badge()
-                    ->icon(fn (string $state): string => match ($state) {
-                        'OPERATIONAL' => 'heroicon-o-check-circle',
-                        'DOWN' => 'heroicon-o-x-circle',
-                        'MAINTENANCE' => 'heroicon-o-wrench',
-                        default => 'heroicon-o-question-mark-circle',
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'OPERATIONAL' => 'success',
-                        'DOWN' => 'danger',
-                        'MAINTENANCE' => 'warning',
-                        default => 'gray',
-                    })
+                    ->icon('heroicon-o-check-circle') // Always OPERATIONAL
+                    ->color('success') // Always success for OPERATIONAL
                     ->toggleable(),
             
                 TextColumn::make('Online_Date')
@@ -287,14 +290,6 @@ class TableRemoteResource extends Resource
                         'SENTUL' => 'Sentul',
                     ]),
 
-                Tables\Filters\SelectFilter::make('Status')
-                    ->label('Status')
-                    ->options([
-                        'OPERATIONAL' => 'Operational',
-                        'DOWN' => 'Down',
-                        'MAINTENANCE' => 'Maintenance',
-                    ]),
-
                 Tables\Filters\SelectFilter::make('Link')
                     ->label('Connection Type')
                     ->options([
@@ -306,6 +301,70 @@ class TableRemoteResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+            ])
+            ->headerActions([
+                Tables\Actions\ExportAction::make()
+                    ->exporter(TableRemoteExporter::class)
+                    ->label('Export to Excel')
+                    ->icon('heroicon-o-arrow-down-on-square')
+                    ->color('success')
+                    ->fileName(fn () => 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx')
+                    ->chunkSize(1000),
+                Tables\Actions\ImportAction::make()
+                    ->importer(TableRemoteImportImporter::class)
+                    ->label('Import from Excel')
+                    ->icon('heroicon-o-arrow-up-on-square-stack')
+                    ->color('info')
+                    ->chunkSize(1000),
+                Tables\Actions\Action::make('downloadTemplate')
+                    ->label('Download Template')
+                    ->icon('heroicon-o-document-text')
+                    ->color('warning')
+                    ->action(function () {
+                        $headers = [
+                            'Site_ID',
+                            'Nama_Toko',
+                            'DC',
+                            'IP_Address',
+                            'Vlan',
+                            'Controller',
+                            'Customer',
+                            'Online_Date',
+                            'Link',
+                            'Status',
+                            'Keterangan',
+                        ];
+
+                        $filePath = storage_path('app/public/TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
+                        $writer = new \OpenSpout\Writer\XLSX\Writer();
+                        $writer->openToFile($filePath);
+
+                        $sheet = $writer->getCurrentSheet();
+                        $row = \OpenSpout\Common\Entity\Row::fromValues($headers);
+                        $writer->addRow($row);
+
+                        $sampleRow = [
+                            'CD27',
+                            'INDUSTRI CIKARANG 6',
+                            'BEKASI',
+                            '7.48.1.246',
+                            '162',
+                            'PRO-SDX-02',
+                            'ALFAMART',
+                            '2022-05-09',
+                            'FO-GSM',
+                            'OPERATIONAL',
+                            'Sample remark',
+                        ];
+                        $row = \OpenSpout\Common\Entity\Row::fromValues($sampleRow);
+                        $writer->addRow($row);
+
+                        $writer->close();
+
+                        return response()->download($filePath, 'TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
+                            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        ])->deleteFileAfterSend(true);
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),

@@ -39,7 +39,9 @@ class FTTHPanelProvider extends PanelProvider
 
             ->brandLogo(fn () => view('components.brand-ftth-logo'))
             ->brandName('Fiber to The Home Customer')
-         
+            ->favicon(asset('images/favicon-opened-svgrepo-com.svg'))
+            ->brandLogoHeight('2rem')
+            ->darkMode(false)         
             ->navigationItems([
                 NavigationItem::make()
                     ->label('Panel Switcher')

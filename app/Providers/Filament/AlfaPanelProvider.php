@@ -42,6 +42,7 @@ class AlfaPanelProvider extends PanelProvider
 
             ->brandLogo(fn () => view('components.brand-alfa-logo'))
             ->brandName('Alfamart Lawson Customer')
+            ->favicon(asset('images/favicon-opened-svgrepo-com.svg'))
             
 
             ->renderHook(
@@ -152,6 +153,7 @@ class AlfaPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+             ->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ])

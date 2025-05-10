@@ -51,29 +51,14 @@ class TablePeplinkResource extends Resource
                                         ->prefixIcon('heroicon-o-hashtag')
                                         ->helperText('Serial Number harus unik untuk setiap perangkat.'),
 
-                                    Forms\Components\Select::make('Model')
+                                    Forms\Components\TextInput::make('Model')
                                         ->required()
-                                        ->options([
-                                            'Balance 20' => 'Balance 20',
-                                            'Balance 30' => 'Balance 30',
-                                            'Balance 50' => 'Balance 50',
-                                            'Balance 210' => 'Balance 210',
-                                            'MAX BR1' => 'MAX BR1',
-                                            // Tambahkan model lain jika perlu
-                                        ])
-                                        ->searchable()
                                         ->prefixIcon('heroicon-o-cube')
                                         ->placeholder('Pilih tipe/model perangkat')
                                         ->helperText('Pilih model perangkat Peplink dari daftar.'),
 
-                                    Forms\Components\Select::make('Kepemilikan')
+                                    Forms\Components\TextInput::make('Kepemilikan')
                                         ->label('Ownership')
-                                        ->required()
-                                        ->options([
-                                            'ALFA' => 'ALFA',
-                                            'SEWA' => 'SEWA',
-                                            'CUSTOMER' => 'CUSTOMER',
-                                        ])
                                         ->prefixIcon('heroicon-o-user-group')
                                         ->placeholder('Pilih kepemilikan')
                                         ->helperText('Tentukan status kepemilikan perangkat.'),
@@ -88,46 +73,54 @@ class TablePeplinkResource extends Resource
 
                                     Forms\Components\TextInput::make('garansi')
                                         ->label('Warranty Period')
-                                        ->required()
                                         ->maxLength(16)
                                         ->placeholder('Contoh: 12 Bulan')
                                         ->prefixIcon('heroicon-o-shield-check')
                                         ->helperText('Masa garansi perangkat (misal: 12 Bulan).'),
 
-                                        Forms\Components\Select::make('Site_ID')
+                                        // Forms\Components\Select::make('Site_ID')
+                                        // ->label('Lokasi Toko')
+                                        // ->relationship(
+                                        //     'remote',
+                                        //     'Site_ID',
+                                        //     fn (Builder $query) => $query->orderBy('DC')
+                                        // )
+                                        // ->getOptionLabelFromRecordUsing(fn (TableRemote $record) =>
+                                        //     "{$record->Nama_Toko} [{$record->Site_ID}] — {$record->DC}" .
+                                        //     ($record->Kota ? " • {$record->Kota}" : "") .
+                                        //     ($record->Alamat ? " • {$record->Alamat}" : "")
+                                        // )
+                                        // ->searchable()
+                                        // ->preload()
+                                        // ->required()
+                                        // ->native(false)
+                                        // ->prefixIcon('heroicon-o-building-storefront')
+                                        // ->searchPrompt('Cari lokasi toko...')
+                                        // ->noSearchResultsMessage('Lokasi tidak ditemukan.')
+                                        // ->loadingMessage('Memuat lokasi...')
+                                        // ->helperText('Pilih lokasi toko untuk perangkat Peplink ini.')
+                                        // ->validationMessages([
+                                        //     'required' => 'Lokasi toko wajib diisi.',
+                                        // ])
+                                        // ->columnSpanFull(),
+
+                                        Forms\Components\TextInput::make('Site_ID')
                                         ->label('Lokasi Toko')
-                                        ->relationship(
-                                            'remote',
-                                            'Site_ID',
-                                            fn (Builder $query) => $query->orderBy('DC')
-                                        )
-                                        ->getOptionLabelFromRecordUsing(fn (TableRemote $record) =>
-                                            "{$record->Nama_Toko} [{$record->Site_ID}] — {$record->DC}" .
-                                            ($record->Kota ? " • {$record->Kota}" : "") .
-                                            ($record->Alamat ? " • {$record->Alamat}" : "")
-                                        )
-                                        ->searchable()
-                                        ->preload()
                                         ->required()
-                                        ->native(false)
-                                        ->prefixIcon('heroicon-o-building-storefront')
-                                        ->searchPrompt('Cari lokasi toko...')
-                                        ->noSearchResultsMessage('Lokasi tidak ditemukan.')
-                                        ->loadingMessage('Memuat lokasi...')
-                                        ->helperText('Pilih lokasi toko untuk perangkat Peplink ini.')
-                                        ->validationMessages([
-                                            'required' => 'Lokasi toko wajib diisi.',
-                                        ])
-                                        ->columnSpanFull(),
+                                        ->placeholder('Masukkan kode toko atau lokasi')
+                                        ->prefixIcon('heroicon-m-building-storefront')
+                                        ->helperText('Gunakan kode toko atau deskripsi lokasi kartu.')
+                                        ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors'])
+                                        ->columnSpan(2),
 
                                     Forms\Components\Select::make('Status')
                                         ->label('Status')
-                                        ->required()
                                         ->options([
-                                            'Active' => 'Active',
-                                            'Inactive' => 'Inactive',
-                                            'Maintenance' => 'Maintenance',
-                                            'Stored' => 'Stored',
+                                            'Operasional' => 'Operasional',
+                                            'Rusak' => 'Rusak',
+                                            'Sparepart' => 'Sparepart',
+                                            'Perbaikan' => 'Perbaikan',
+                                            'Tidak Bisa Diperbaiki' => 'Tidak Bisa Diperbaiki',
                                         ])
                                         ->default('Active')
                                         ->prefixIcon('heroicon-o-light-bulb')
@@ -171,19 +164,23 @@ class TablePeplinkResource extends Resource
                 })
                 ->toggleable(),
 
-            TextColumn::make('remote.Nama_Toko')
+            // TextColumn::make('remote.Nama_Toko')
+            //     ->label('Lokasi Toko')
+            //     ->searchable()
+            //     ->sortable()
+            //     ->icon('heroicon-o-building-storefront')
+            //     ->toggleable()
+            //     ->toggledHiddenByDefault(),
+
+                TextColumn::make('Site_ID')
                 ->label('Lokasi Toko')
                 ->searchable()
                 ->sortable()
-                ->icon('heroicon-o-building-storefront')
-                ->toggleable()
-                ->toggledHiddenByDefault(),
-
-            TextColumn::make('Site_ID')
-                ->label('Site ID')
-                ->searchable()
-                ->sortable()
-                ->icon('heroicon-o-identification')
+                ->wrap()
+                ->tooltip(fn ($record) => $record->remote
+                    ? "Toko: {$record->remote->Nama_Toko} " . ($record->Lokasi_Tambahan ? "- {$record->Lokasi_Tambahan}" : '')
+                    : 'Tidak ada lokasi')
+                ->icon('heroicon-m-building-storefront')
                 ->toggleable(),
 
             TextColumn::make('tgl_beli')
@@ -203,17 +200,19 @@ class TablePeplinkResource extends Resource
             Tables\Columns\TextColumn::make('Status')
                 ->badge()
                 ->color(fn (string $state): string => match ($state) {
-                    'Active' => 'success',
-                    'Inactive' => 'danger',
-                    'Maintenance' => 'warning',
-                    'Stored' => 'secondary',
+                    'Operasional' => 'success',
+                    'Rusak' => 'danger',
+                    'Sparepart' => 'warning',
+                    'Perbaikan' => 'secondary',
+                    'Tidak Bisa Diperbaiki' => 'info',
                     default => 'secondary',
                 })
                 ->icon(fn (string $state): string => match ($state) {
-                    'Active' => 'heroicon-o-check-circle',
-                    'Inactive' => 'heroicon-o-x-circle',
-                    'Maintenance' => 'heroicon-o-wrench-screwdriver',
-                    'Stored' => 'heroicon-o-archive-box',
+                    'Operasional' => 'heroicon-o-check-circle',
+                    'Rusak' => 'heroicon-o-x-circle',
+                    'Sparepart' => 'heroicon-o-wrench-screwdriver',
+                    'Perbaikan' => 'heroicon-o-archive-box',
+                    'Tidak Bisa Diperbaiki' => 'heroicon-o-trash',
                     default => 'heroicon-o-question-mark-circle',
                 })
                 ->toggleable(),

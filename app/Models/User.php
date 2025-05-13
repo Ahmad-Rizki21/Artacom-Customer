@@ -22,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'Level',
     ];
 
     /**
@@ -45,5 +46,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super_admin');
     }
 }

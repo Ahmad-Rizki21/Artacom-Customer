@@ -11,20 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('table_peplink', function (Blueprint $table) {
-            $table->string('SN', 24);
-            $table->string('Model', 32);
-            $table->string('Kepemilikan', 32);
-            $table->date('tgl_beli');
-            $table->string('garansi', 16);
+        Schema::create('table_simcard', function (Blueprint $table) {
+            $table->string('Sim_Number', 16)->primary();
+            $table->string('Provider', 16);
             $table->string('Site_ID', 16);
-            $table->string('Status', 32);
+            $table->text('Informasi_Tambahan')->nullable(); // Tambahkan nullable()
+            $table->string('SN_Card', 16);
+            $table->string('Status', 16);
             $table->timestamps();
 
-            // Set SN as primary key
-            // $table->primary('SN');
-
-            // Foreign key site_id
+            // Foreign key untuk Site_ID yang terhubung ke table_remote
             $table->foreign('Site_ID')
                 ->references('Site_ID')
                 ->on('table_remote')
@@ -38,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('table_peplink');
+        Schema::dropIfExists('table_simcard');
     }
 };

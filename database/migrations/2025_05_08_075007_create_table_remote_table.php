@@ -21,8 +21,8 @@ return new class extends Migration
             $table->string('Customer', 16);
             $table->date('Online_Date');
             $table->string('Link', 8);
-            $table->string('Status', 16);
-            $table->text('Keterangan');
+            $table->string('Status', 16)->default('Operational'); // Tambahkan default value
+            $table->text('Keterangan')->nullable(); // Langsung set sebagai nullable
             $table->timestamps();
         });
     }

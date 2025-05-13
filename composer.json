@@ -10,6 +10,7 @@
         "afsakar/filament-leaflet-map-picker": "^1.2",
         "arbermustafa/filament-locationpickr-field": "2.0.0",
         "bezhansalleh/filament-shield": "^3.3",
+        "blade-ui-kit/blade-heroicons": "^2.6",
         "cheesegrits/filament-google-maps": "^3.0",
         "codewithdennis/filament-simple-map": "^3.0",
         "cornford/googlmapper": "^2.8",
@@ -22,9 +23,12 @@
         "laravel/tinker": "^2.10.1",
         "larswiegers/laravel-maps": "^0.19.0",
         "livewire/livewire": "^3.6",
+        "maatwebsite/excel": "^3.1",
         "nuxtifyts/dash-stack-theme": "^1.2",
         "openspout/openspout": "^4.28",
+        "phpoffice/phpspreadsheet": "^1.29",
         "pxlrbt/filament-excel": "^2.4",
+        "swisnl/filament-backgrounds": "^1.1",
         "webbingbrasil/filament-maps": "^3.0"
     },
     "require-dev": {

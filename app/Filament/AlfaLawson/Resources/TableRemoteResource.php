@@ -13,11 +13,22 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Tables\Columns\TextColumn;
-use App\Filament\Exports\TableRemoteExporter;
 use App\Filament\Imports\TableRemoteImportImporter;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Chart\Chart;
+use PhpOffice\PhpSpreadsheet\Chart\DataSeries;
+use PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues;
+use PhpOffice\PhpSpreadsheet\Chart\Legend;
+use PhpOffice\PhpSpreadsheet\Chart\PlotArea;
+use PhpOffice\PhpSpreadsheet\Chart\Title;
 use OpenSpout\Writer\XLSX\Writer;
-
-
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TableRemoteResource extends Resource
 {
@@ -127,59 +138,8 @@ class TableRemoteResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->query(TableRemote::query()->where('Status', 'OPERATIONAL')) // Filter only OPERATIONAL records
+            ->query(TableRemote::query()->where('Status', 'OPERATIONAL'))
             ->description('Daftar semua Remote dengan status OPERATIONAL.')
-            // ->headerActions([
-            //     Tables\Actions\Action::make('manageColumns')
-            //         ->label('Kelola Kolom')
-            //         ->icon('heroicon-o-bars-3')
-            //         ->color('gray')
-            //         ->modalHeading('Pilih Kolom yang Ditampilkan')
-            //         ->modalSubmitActionLabel('Simpan')
-            //         ->modalCancelActionLabel('Batal')
-            //         ->form([
-            //             CheckboxList::make('visibleColumns')
-            //                 ->label('Pilih Kolom')
-            //                 ->options([
-            //                     'Site_ID' => 'Site ID',
-            //                     'Nama_Toko' => 'Nama Toko',
-            //                     'DC' => 'Distribution Center',
-            //                     'IP_Address' => 'IP Address',
-            //                     'Vlan' => 'VLAN',
-            //                     'Controller' => 'Controller',
-            //                     'Link' => 'Connection Type',
-            //                     'Status' => 'Status',
-            //                     'Online_Date' => 'Online Date',
-            //                     'Customer' => 'Customer',
-            //                     'Keterangan' => 'Remarks',
-            //                 ])
-            //                 ->default(function () {
-            //                     return array_keys([
-            //                         'Site_ID' => 'Site ID',
-            //                         'Nama_Toko' => 'Nama Toko',
-            //                         'DC' => 'Distribution Center',
-            //                         'IP_Address' => 'IP Address',
-            //                         'Vlan' => 'VLAN',
-            //                         'Controller' => 'Controller',
-            //                         'Link' => 'Connection Type',
-            //                         'Status' => 'Status',
-            //                         'Online_Date' => 'Online Date',
-            //                         'Customer' => 'Customer',
-            //                         'Keterangan' => 'Remarks',
-            //                     ]);
-            //                 })
-            //                 ->columns(2)
-            //                 ->required(),
-            //         ])
-            //         ->action(function (array $data) {
-            //             session()->put('visible_columns_remote', $data['visibleColumns']);
-            //             Notification::make()
-            //                 ->title('Kolom diperbarui')
-            //                 ->success()
-            //                 ->send();
-            //         })
-            //         ->modalWidth('lg'),
-            // ])
             ->columns([
                 TextColumn::make('Site_ID')
                     ->label('Site ID')
@@ -202,12 +162,6 @@ class TableRemoteResource extends Resource
                     ->label('Distribution Center')
                     ->badge()
                     ->icon('heroicon-o-map-pin')
-                    // ->color(fn (string $state): string => match ($state) {
-                    //     'BEKASI' => 'success',
-                    //     'MARUNDA' => 'warning',
-                    //     'SENTUL' => 'info',
-                    //     default => 'gray',
-                    // })
                     ->toggleable(),
             
                 TextColumn::make('IP_Address')
@@ -244,7 +198,7 @@ class TableRemoteResource extends Resource
                         'FO-GSM' => 'success',
                         'SINGLE-GSM' => 'info',
                         'DUAL-GSM' => 'warning',
-                        'FO'=> 'danger',
+                        'FO' => 'danger',
                         default => 'gray',
                     })
                     ->toggleable(),
@@ -252,8 +206,8 @@ class TableRemoteResource extends Resource
                 TextColumn::make('Status')
                     ->label('Status')
                     ->badge()
-                    ->icon('heroicon-o-check-circle') // Always OPERATIONAL
-                    ->color('success') // Always success for OPERATIONAL
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
                     ->toggleable(),
             
                 TextColumn::make('Online_Date')
@@ -303,13 +257,199 @@ class TableRemoteResource extends Resource
                 Tables\Actions\EditAction::make(),
             ])
             ->headerActions([
-                Tables\Actions\ExportAction::make()
-                    ->exporter(TableRemoteExporter::class)
+                Tables\Actions\Action::make('export')
                     ->label('Export to Excel')
                     ->icon('heroicon-o-arrow-down-on-square')
                     ->color('success')
-                    ->fileName(fn () => 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx')
-                    ->chunkSize(1000),
+                    ->action(function () {
+                        Log::info('TableRemoteResource: Starting export action with PhpSpreadsheet');
+
+                        try {
+                            $spreadsheet = new Spreadsheet();
+                            $sheet = $spreadsheet->getActiveSheet();
+
+                            // Set headers
+                            $headers = [
+                                'Site ID',
+                                'Nama Toko',
+                                'Distribution Center',
+                                'IP Address',
+                                'VLAN',
+                                'Controller',
+                                'Customer',
+                                'Online Date',
+                                'Connection Type',
+                                'Status',
+                                'Remarks',
+                            ];
+                            $sheet->fromArray($headers, null, 'A1');
+
+                            // Set data
+                            $data = TableRemote::all()->map(function ($row) {
+                                return [
+                                    $row->Site_ID ?? '-',
+                                    strtoupper($row->Nama_Toko ?? '-'),
+                                    $row->DC ?? '-',
+                                    $row->IP_Address ?? '-',
+                                    $row->Vlan ?? '-',
+                                    $row->Controller ?? '-',
+                                    $row->Customer ?? '-',
+                                    $row->Online_Date ? \Carbon\Carbon::parse($row->Online_Date)->format('d/m/Y') : '-',
+                                    match ($row->Link) {
+                                        'FO-GSM' => '✅ FO-GSM',
+                                        'SINGLE-GSM' => '🔵 SINGLE-GSM',
+                                        'DUAL-GSM' => '🟡 DUAL-GSM',
+                                        default => $row->Link ?? '-'
+                                    },
+                                    '✓ ' . ($row->Status ?? '-'),
+                                    $row->Keterangan ?? '-',
+                                ];
+                            })->toArray();
+                            $sheet->fromArray($data, null, 'A2');
+
+                            // Apply styles
+                            $highestRow = $sheet->getHighestRow();
+
+                            // Header style
+                            $sheet->getStyle('A1:K1')->applyFromArray([
+                                'font' => [
+                                    'bold' => true,
+                                    'color' => ['argb' => Color::COLOR_WHITE],
+                                    'size' => 12,
+                                ],
+                                'fill' => [
+                                    'fillType' => Fill::FILL_SOLID,
+                                    'startColor' => ['argb' => 'FF006400'], // Dark green
+                                ],
+                                'alignment' => [
+                                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                                    'vertical' => Alignment::VERTICAL_CENTER,
+                                    'wrapText' => true,
+                                ],
+                                'borders' => [
+                                    'allBorders' => [
+                                        'borderStyle' => Border::BORDER_THIN,
+                                        'color' => ['argb' => Color::COLOR_BLACK],
+                                    ],
+                                ],
+                            ]);
+
+                            // Data rows style
+                            for ($row = 2; $row <= $highestRow; $row++) {
+                                $fillColor = ($row % 2 === 0) ? 'FFDFECDB' : 'FFFFFFFF'; // Light green for even, white for odd
+                                if (strpos($sheet->getCell("I{$row}")->getValue(), 'FO-GSM') !== false) {
+                                    $fillColor = 'FFFFF5D7'; // Light yellow for FO-GSM
+                                }
+                                $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
+                                    'alignment' => [
+                                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                                        'vertical' => Alignment::VERTICAL_CENTER,
+                                        'wrapText' => true,
+                                    ],
+                                    'borders' => [
+                                        'allBorders' => [
+                                            'borderStyle' => Border::BORDER_THIN,
+                                            'color' => ['argb' => Color::COLOR_BLACK],
+                                        ],
+                                    ],
+                                    'fill' => [
+                                        'fillType' => Fill::FILL_SOLID,
+                                        'startColor' => ['argb' => $fillColor],
+                                    ],
+                                ]);
+                            }
+
+                            // Add chart data (count of remotes per DC)
+                            $chartData = TableRemote::select('DC', DB::raw('COUNT(*) as count'))
+                                ->groupBy('DC')
+                                ->get()
+                                ->map(function ($item) {
+                                    return [$item->DC ?? 'Unknown', $item->count];
+                                })
+                                ->toArray();
+
+                            Log::info('Chart Data', ['data' => $chartData]);
+
+                            // Add chart data to sheet (start after data table)
+                            $chartStartRow = $highestRow + 3;
+                            $sheet->setCellValue('A' . $chartStartRow, 'Distribution Center');
+                            $sheet->setCellValue('B' . $chartStartRow, 'Number of Remotes');
+                            $sheet->fromArray($chartData, null, 'A' . ($chartStartRow + 1));
+
+                            // Apply style to chart data
+                            $chartEndRow = $chartStartRow + count($chartData);
+                            $sheet->getStyle('A' . $chartStartRow . ':B' . $chartEndRow)->applyFromArray([
+                                'font' => ['bold' => true],
+                                'borders' => [
+                                    'allBorders' => [
+                                        'borderStyle' => Border::BORDER_THIN,
+                                        'color' => ['argb' => Color::COLOR_BLACK],
+                                    ],
+                                ],
+                                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                            ]);
+
+                            // Create chart
+                            // Define the label for the series
+                            $label = [new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_STRING, 'Sheet1!$B$' . $chartStartRow, null, 1)]; // "Number of Remotes"
+
+                            // Define the categories (X-axis labels)
+                            $categories = [new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_STRING, 'Sheet1!$A$' . ($chartStartRow + 1) . ':$A$' . $chartEndRow, null, count($chartData))];
+
+                            // Define the values (Y-axis data)
+                            $values = [new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_NUMBER, 'Sheet1!$B$' . ($chartStartRow + 1) . ':$B$' . $chartEndRow, null, count($chartData))];
+
+                            // Create the data series
+                            $series = new DataSeries(
+                                DataSeries::TYPE_BARCHART,
+                                DataSeries::GROUPING_STANDARD,
+                                range(0, count($values) - 1),
+                                $label,
+                                $categories,
+                                $values
+                            );
+
+                            $plotArea = new PlotArea(null, [$series]);
+                            $legend = new Legend(Legend::POSITION_RIGHT, null, false);
+                            $title = new Title('Number of Remotes per Distribution Center');
+
+                            $chart = new Chart(
+                                'RemotePerDC',
+                                $title,
+                                $legend,
+                                $plotArea
+                            );
+
+                            $chart->setTopLeftPosition('D' . ($chartStartRow + 2));
+                            $chart->setBottomRightPosition('I' . ($chartStartRow + 15));
+
+                            $sheet->addChart($chart);
+
+                            // Auto-size columns
+                            foreach (range('A', 'K') as $col) {
+                                $sheet->getColumnDimension($col)->setAutoSize(true);
+                            }
+
+                            // Save and download
+                            $filePath = storage_path('app/public/TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx');
+                            $writer = new Xlsx($spreadsheet);
+                            $writer->setIncludeCharts(true);
+                            $writer->save($filePath);
+
+                            Log::info('TableRemoteResource: Export completed', ['file' => $filePath]);
+
+                            return response()->download($filePath, 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx', [
+                                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            ])->deleteFileAfterSend(true);
+                        } catch (\Exception $e) {
+                            Log::error('TableRemoteResource: Export failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+                            Notification::make()
+                                ->title('Export Failed')
+                                ->body('An error occurred while exporting: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Tables\Actions\ImportAction::make()
                     ->importer(TableRemoteImportImporter::class)
                     ->label('Import from Excel')
@@ -336,7 +476,7 @@ class TableRemoteResource extends Resource
                         ];
 
                         $filePath = storage_path('app/public/TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
-                        $writer = new \OpenSpout\Writer\XLSX\Writer();
+                        $writer = new Writer();
                         $writer->openToFile($filePath);
 
                         $sheet = $writer->getCurrentSheet();

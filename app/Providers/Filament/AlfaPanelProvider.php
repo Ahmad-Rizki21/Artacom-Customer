@@ -21,6 +21,7 @@ use Filament\Navigation\NavigationItem;
 use Filament\Navigation\NavigationGroup;
 use App\Filament\AlfaLawson\Widgets\AlfaLawsonDCMapWidget;
 use App\Filament\AlfaLawson\Widgets\DCMapWidget;
+use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 
 class AlfaPanelProvider extends PanelProvider
 {
@@ -101,32 +102,6 @@ class AlfaPanelProvider extends PanelProvider
                             ->url('/ftth')
                             ->icon('heroicon-o-arrow-right-circle'),
                     ]),
-    
-                // Network Management Group
-                NavigationItem::make()
-                    ->label('Remote')
-                    ->icon('heroicon-o-server')
-                    ->url('/alfa/remote')
-                    ->group('Network Management'),
-    
-                NavigationItem::make()
-                    ->label('Fiber Optic Connections')
-                    ->icon('heroicon-o-signal')
-                    ->url('/alfa/fiber-optic')
-                    ->group('Network Management'),
-    
-                NavigationItem::make()
-                    ->label('Peplink Device')
-                    ->icon('heroicon-o-server-stack')
-                    ->url('/alfa/peplink')
-                    ->isActiveWhen(fn() => request()->is('alfa/peplink*'))
-                    ->group('Network Management'),
-    
-                NavigationItem::make()
-                    ->label('SIM Card')
-                    ->icon('heroicon-o-credit-card')
-                    ->url('/alfa/sim-card')
-                    ->group('Network Management'),
             ])
 
             // ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
@@ -166,6 +141,8 @@ class AlfaPanelProvider extends PanelProvider
             )
             ->plugins([
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
+                FilamentBackgroundsPlugin::make()
+                ->showAttribution(false),
             ]);
             
     }

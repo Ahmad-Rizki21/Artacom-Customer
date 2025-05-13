@@ -1,73 +1,191 @@
 <?php
 
-namespace App\Filament\Exports;
+namespace App\Exports;
 
 use App\Models\AlfaLawson\TableRemote;
-use Filament\Actions\Exports\ExportColumn;
-use Filament\Actions\Exports\Exporter;
-use Filament\Actions\Exports\Models\Export;
-use OpenSpout\Common\Entity\Style\Style;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Chart\Chart;
+use PhpOffice\PhpSpreadsheet\Chart\DataSeries;
+use PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues;
+use PhpOffice\PhpSpreadsheet\Chart\Legend;
+use PhpOffice\PhpSpreadsheet\Chart\PlotArea;
+use PhpOffice\PhpSpreadsheet\Chart\Title;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-class TableRemoteExporter extends Exporter
+class TableRemoteExporter implements FromCollection, WithHeadings, WithStyles, ShouldAutoSize, WithEvents
 {
-    protected static ?string $model = TableRemote::class;
+    public function collection()
+    {
+        return TableRemote::all()->map(function ($row) {
+            return [
+                'Site ID' => $row->Site_ID ?? '-',
+                'Nama Toko' => strtoupper($row->Nama_Toko ?? '-'),
+                'Distribution Center' => $row->DC ?? '-',
+                'IP Address' => $row->IP_Address ?? '-',
+                'VLAN' => $row->Vlan ?? '-',
+                'Controller' => $row->Controller ?? '-',
+                'Customer' => $row->Customer ?? '-',
+                'Online Date' => $row->Online_Date ? \Carbon\Carbon::parse($row->Online_Date)->format('d/m/Y') : '-',
+                'Connection Type' => match ($row->Link) {
+                    'FO-GSM' => '✅ FO-GSM',
+                    'SINGLE-GSM' => '🔵 SINGLE-GSM',
+                    'DUAL-GSM' => '🟡 DUAL-GSM',
+                    default => $row->Link ?? '-'
+                },
+                'Status' => '✓ ' . ($row->Status ?? '-'),
+                'Remarks' => $row->Keterangan ?? '-',
+            ];
+        });
+    }
 
-    public static function getColumns(): array
+    public function headings(): array
     {
         return [
-            ExportColumn::make('Site_ID')
-                ->label('Site ID')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Nama_Toko')
-                ->label('Nama Toko')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('DC')
-                ->label('Distribution Center')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('IP_Address')
-                ->label('IP Address')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Vlan')
-                ->label('VLAN')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Controller')
-                ->label('Controller')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Customer')
-                ->label('Customer')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Online_Date')
-                ->label('Online Date')
-                ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y') : '-'),
-            ExportColumn::make('Link')
-                ->label('Connection Type')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Status')
-                ->label('Status')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-            ExportColumn::make('Keterangan')
-                ->label('Remarks')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
+            'Site ID',
+            'Nama Toko',
+            'Distribution Center',
+            'IP Address',
+            'VLAN',
+            'Controller',
+            'Customer',
+            'Online Date',
+            'Connection Type',
+            'Status',
+            'Remarks',
         ];
     }
 
-    public static function getCompletedNotificationBody(Export $export): string
+    public function styles(Worksheet $sheet)
     {
-        $body = 'Your table remote export has completed and ' . number_format($export->successful_rows) . ' ' . str('row')->plural($export->successful_rows) . ' exported.';
-
-        if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' ' . str('row')->plural($failedRowsCount) . ' failed to export.';
-        }
-
-        return $body;
+        return [
+            // Style for header
+            1 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 12],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '006400']], // Dark green
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+            ],
+            // Style for all data rows
+            '2:' . $sheet->getHighestRow() => [
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+            ],
+        ];
     }
 
-    // Optional: Add styling for the Excel file
-    public function getExcelStyle(): ?Style
+    public function registerEvents(): array
     {
-        return (new Style())
-            ->setFontBold()
-            ->setFontSize(12)
-            ->setShouldWrapText(false);
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate(); // Get the PhpSpreadsheet Worksheet
+                $highestRow = $sheet->getHighestRow();
+
+                // Apply alternating row colors
+                for ($row = 2; $row <= $highestRow; $row++) {
+                    $fillColor = ($row % 2 === 0) ? 'DFECDB' : 'FFFFFF'; // Light green for even, white for odd
+                    if (strpos($sheet->getCell("I{$row}")->getValue(), 'FO-GSM') !== false) {
+                        $fillColor = 'FFF5D7'; // Light yellow for FO-GSM
+                    }
+                    $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($fillColor);
+                }
+
+                // Add chart data (count of remotes per DC)
+                $chartData = TableRemote::select('DC', DB::raw('COUNT(*) as count'))
+                    ->groupBy('DC')
+                    ->get()
+                    ->map(function ($item) {
+                        return [$item->DC ?? 'Unknown', $item->count];
+                    })
+                    ->toArray();
+
+                // Log the chart data for debugging
+                Log::info('Chart Data', ['data' => $chartData]);
+
+                // Add chart data to sheet (start after data table)
+                $chartStartRow = $highestRow + 3;
+                $sheet->setCellValue('A' . $chartStartRow, 'Distribution Center');
+                $sheet->setCellValue('B' . $chartStartRow, 'Number of Remotes');
+
+                // Write chart data to sheet for visual purposes
+                $chartEndRow = $chartStartRow + count($chartData);
+                foreach ($chartData as $index => $data) {
+                    $row = $chartStartRow + 1 + $index;
+                    $sheet->setCellValueExplicit('A' . $row, $data[0], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    $sheet->setCellValueExplicit('B' . $row, $data[1], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
+                }
+
+                // Apply style to chart data
+                $sheet->getStyle('A' . $chartStartRow . ':B' . $chartEndRow)->applyFromArray([
+                    'font' => ['bold' => true],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['rgb' => '000000'],
+                        ],
+                    ],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                ]);
+
+                // Extract categories and values directly from chartData
+                $categories = array_column($chartData, 0); // Extract Distribution Centers
+                $values = array_column($chartData, 1); // Extract Number of Remotes
+
+                // Create chart with static data
+                $dataSeriesLabels = [
+                    new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_STRING, null, null, 1, ['Number of Remotes']),
+                ];
+                $xAxisTickValues = [
+                    new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_STRING, null, null, count($categories), $categories),
+                ];
+                $dataSeriesValues = [
+                    new DataSeriesValues(DataSeriesValues::DATASERIES_TYPE_NUMBER, null, null, count($values), $values),
+                ];
+
+                $series = new DataSeries(
+                    DataSeries::TYPE_BARCHART,
+                    DataSeries::GROUPING_STANDARD,
+                    range(0, count($dataSeriesValues) - 1),
+                    $dataSeriesLabels,
+                    $xAxisTickValues,
+                    $dataSeriesValues
+                );
+
+                $plotArea = new PlotArea(null, [$series]);
+                $legend = new Legend(Legend::POSITION_RIGHT, null, false);
+                $title = new Title('Number of Remotes per Distribution Center');
+
+                $chart = new Chart(
+                    'RemotePerDC',
+                    $title,
+                    $legend,
+                    $plotArea
+                );
+
+                $chart->setTopLeftPosition('D' . ($chartStartRow + 2));
+                $chart->setBottomRightPosition('J' . ($chartStartRow + 15));
+
+                $sheet->addChart($chart);
+            },
+        ];
     }
 }

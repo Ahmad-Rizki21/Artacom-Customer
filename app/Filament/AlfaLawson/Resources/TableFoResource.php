@@ -11,6 +11,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Exports\TableFoExporter;
+use App\Filament\Imports\TableFoImporter;
 
 class TableFoResource extends Resource
 {
@@ -137,7 +139,8 @@ class TableFoResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
+        return $table        
+            ->description('Daftar semua Remote FO dengan status OPERATIONAL.')
             ->columns([
                 Tables\Columns\TextColumn::make('CID')
                     ->label('Connection ID')
@@ -198,6 +201,58 @@ class TableFoResource extends Resource
                     ->indicator('Distribution Center'),
             ])
             ->filtersFormColumns(3)
+            ->headerActions([
+                Tables\Actions\ExportAction::make()
+                    ->exporter(TableFoExporter::class)
+                    ->label('Export to Excel')
+                    ->icon('heroicon-o-arrow-down-on-square')
+                    ->color('success')
+                    ->fileName(fn () => 'TableFo_Export_' . now()->format('Ymd_His') . '.xlsx')
+                    ->chunkSize(1000),
+                Tables\Actions\ImportAction::make()
+                    ->importer(TableFoImporter::class)
+                    ->label('Import from Excel')
+                    ->icon('heroicon-o-arrow-up-on-square-stack')
+                    ->color('info')
+                    ->chunkSize(1000),
+                Tables\Actions\Action::make('downloadTemplate')
+                ->label('Download Template')
+                ->icon('heroicon-o-document-text')
+                ->color('warning')
+                ->action(function () {
+                    $headers = [
+                        'CID',
+                        'Provider',
+                        'Register_Name',
+                        'Site_ID',
+                        'Status',
+                    ];
+
+                    $filePath = storage_path('app/public/TableFO_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
+                    $writer = new \OpenSpout\Writer\XLSX\Writer();
+                    $writer->openToFile($filePath);
+
+                    $sheet = $writer->getCurrentSheet();
+                    $row = \OpenSpout\Common\Entity\Row::fromValues($headers);
+                    $writer->addRow($row);
+
+                    $sampleRow = [
+                        'FO123456',
+                        'ICON+',
+                        'ALFAMART CIKARANG',
+                        'CD27',  // This should be a valid Site_ID from table_remote
+                        'Active',
+                    ];
+                    $row = \OpenSpout\Common\Entity\Row::fromValues($sampleRow);
+                    $writer->addRow($row);
+
+                    $writer->close();
+
+                    return response()->download($filePath, 'TableFO_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
+                        'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    ])->deleteFileAfterSend(true);
+                })
+            ])
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->icon('heroicon-o-pencil-square')
@@ -209,6 +264,7 @@ class TableFoResource extends Resource
                             ->body('The fiber optic connection has been updated successfully.')
                             ->duration(5000)
                     ),
+                
                 Tables\Actions\DeleteAction::make()
                     ->icon('heroicon-o-trash'),
             ])

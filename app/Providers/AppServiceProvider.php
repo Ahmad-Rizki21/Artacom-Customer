@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Providers\Filament\AlfaPanelProvider;
 use App\Providers\Filament\FtthPanelProvider;
 use Illuminate\Support\ServiceProvider;
+use Carbon\Carbon;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Carbon::setLocale('id');
+            date_default_timezone_set(config('app.timezone'));
+
     }
 }

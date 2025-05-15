@@ -126,61 +126,63 @@ class Ticket extends Model
     }
 
     protected static function boot()
-{
-    parent::boot();
-    
-    static::creating(function ($model) {
-        if (!$model->No_Ticket) {
-            $model->No_Ticket = static::generateTicketNumber();
-        }
+    {
+        parent::boot();
         
-        $model->Status = static::STATUS_OPEN;
-        $model->Open_By = Auth::id();
-        $model->Open_Time = now();
-        $model->Reported_By = $model->Reported_By ?: Auth::id();
-
-        Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
-    });
-
-    static::updating(function ($model) {
-        if ($model->isDirty('Status')) {
-            $oldStatus = $model->getOriginal('Status');
-            $newStatus = $model->Status;
-
-            switch ($newStatus) {
-                case static::STATUS_PENDING:
-                    if (empty($model->Pending_Reason)) {
-                        throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
-                    }
-                    $model->Pending_Start = now();
-                    $model->Pending_Stop = null;
-                    break;
-
-                case static::STATUS_CLOSED:
-                    if (empty($model->Action_Summry)) {
-                        throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
-                    }
-                    if (strlen(trim($model->Action_Summry)) < 10) {
-                        throw new \Exception('Action Summary terlalu singkat, mohon berikan penjelasan yang lebih detail');
-                    }
-                    $model->Closed_Time = now();
-                    $model->Closed_By = Auth::id();
-                    if ($oldStatus === static::STATUS_PENDING) {
-                        $model->Pending_Stop = now();
-                    }
-                    break;
-
-                case static::STATUS_OPEN:
-                    if ($oldStatus === static::STATUS_PENDING) {
-                        $model->Pending_Stop = now();
-                    }
-                    break;
+        static::creating(function ($model) {
+            if (!$model->No_Ticket) {
+                $model->No_Ticket = static::generateTicketNumber();
             }
+            
+            $model->Status = static::STATUS_OPEN;
+            $model->Open_By = Auth::id();
+            $model->Open_Time = now();
+            $model->Reported_By = $model->Reported_By ?: Auth::id();
 
-            Log::info("Ticket {$model->No_Ticket} status changed from {$oldStatus} to {$newStatus} by " . Auth::user()->name);
-        }
-    });
-}
+            Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
+        });
+
+        static::updating(function ($model) {
+            if ($model->isDirty('Status')) {
+                $oldStatus = $model->getOriginal('Status');
+                $newStatus = $model->Status;
+
+                switch ($newStatus) {
+                    case static::STATUS_PENDING:
+                        $model->Pending_Start = now();
+                        $model->Pending_Stop = null;
+                        // Tambahkan log untuk debugging
+                        Log::info("Pending Reason: " . ($model->Pending_Reason ?? 'null'));
+                        if (empty(trim($model->Pending_Reason))) {
+                            throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
+                        }
+                        break;
+
+                    case static::STATUS_CLOSED:
+                        if (empty(trim($model->Action_Summry))) {
+                            throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
+                        }
+                        if (strlen(trim($model->Action_Summry)) < 10) {
+                            throw new \Exception('Action Summary terlalu singkat, mohon berikan penjelasan yang lebih detail');
+                        }
+                        $model->Closed_Time = now();
+                        $model->Closed_By = Auth::id();
+                        if ($oldStatus === static::STATUS_PENDING) {
+                            $model->Pending_Stop = now();
+                        }
+                        break;
+
+                    case static::STATUS_OPEN:
+                        if ($oldStatus === static::STATUS_PENDING) {
+                            $model->Pending_Stop = now();
+                        }
+                        break;
+                }
+
+                Log::info("Ticket {$model->No_Ticket} status changed from {$oldStatus} to {$newStatus} by " . Auth::user()->name);
+            }
+        });
+    }
 
     // Static Methods
     public static function generateTicketNumber(): string
@@ -223,9 +225,9 @@ class Ticket extends Model
     }
 
     public function getOpenedByNameAttribute(): string
-{
-    return $this->openedBy?->name ?? 'Unknown User';
-}
+    {
+        return $this->openedBy?->name ?? 'Unknown User';
+    }
 
 
     // Accessors & Mutators
@@ -254,16 +256,6 @@ class Ticket extends Model
     {
         return $this->Status === static::STATUS_OPEN;
     }
-
-    // public function getPendingDurationAttribute(): ?string
-    // {
-    //     if (!$this->Pending_Start) {
-    //         return null;
-    //     }
-
-    //     $endTime = $this->Pending_Stop ?? Carbon::now();
-    //     return $this->Pending_Start->diffForHumans($endTime);
-    // }
 
     public function getResolutionTimeAttribute(): ?string
     {

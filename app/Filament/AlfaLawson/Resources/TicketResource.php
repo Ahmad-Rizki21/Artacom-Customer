@@ -14,7 +14,6 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Group;
 use Filament\Forms\Components\Tabs;
-use Filament\Forms\Components\View;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
@@ -172,12 +171,16 @@ class TicketResource extends Resource
                                                 ])
                                                 ->required()
                                                 ->live()
-                                                ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                                ->afterStateUpdated(function ($state, Forms\Set $set, $record) {
                                                     if ($state === 'PENDING') {
                                                         $set('Pending_Start', now());
-                                                        $set('Pending_Reason', null);
+                                                        if (!$record || $record->Status !== 'PENDING') {
+                                                            $set('Pending_Reason', null);
+                                                        }
                                                     } elseif ($state === 'CLOSED') {
                                                         $set('Closed_Time', now());
+                                                    } elseif ($state === 'OPEN' && $record && $record->Status === 'PENDING') {
+                                                        $set('Pending_Stop', now());
                                                     }
                                                 })
                                                 ->disabled(fn ($record) => $record?->Status === 'CLOSED')
@@ -242,62 +245,68 @@ class TicketResource extends Resource
                                     ]),
 
                                 Tabs\Tab::make('Status Updates')
-                                    ->icon('heroicon-o-clock')
-                                    ->schema([
-                                        Grid::make(2)->schema([
-                                            // Timer Component
-                                            View::make('filament.components.ticket-timer')
-                                                ->columnSpan(2),
+    ->icon('heroicon-o-clock')
+    ->schema([
+        Grid::make(2)->schema([
+            // Gunakan Livewire component dengan properti record yang dievaluasi
+            \Filament\Forms\Components\Livewire::make(\App\Filament\Components\TicketTimer::class, function ($livewire) {
+                // Akses record dari konteks Livewire atau form
+                $record = $livewire->getRecord();
+                return ['record' => $record];
+            })
+                ->columnSpan(2),
 
-                                            // Open Time Information
-                                            Group::make([
-                                                Forms\Components\DateTimePicker::make('Open_Time')
-                                                    ->label('Opened At')
-                                                    ->disabled()
-                                                    ->dehydrated(),
+            // Open Time Information
+            Group::make([
+                Forms\Components\DateTimePicker::make('Open_Time')
+                    ->label('Opened At')
+                    ->disabled()
+                    ->dehydrated(),
 
-                                                Forms\Components\TextInput::make('openedBy.name')
-                                                    ->label('Opened By')
-                                                    ->formatStateUsing(fn ($record) => $record?->openedBy?->name ?? 'Unknown User')
-                                                    ->disabled()
-                                                    ->dehydrated(false),
-                                            ])->columns(2),
+                Forms\Components\TextInput::make('openedBy.name')
+                    ->label('Opened By')
+                    ->formatStateUsing(fn ($record) => $record?->openedBy?->name ?? 'Unknown User')
+                    ->disabled()
+                    ->dehydrated(false),
+            ])->columns(2),
 
-                                            // Pending Information
-                                            Group::make([
-                                                Forms\Components\DateTimePicker::make('Pending_Start')
-                                                    ->label('Pending Since')
-                                                    ->disabled()
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
+            // Pending Information
+            Group::make([
+                Forms\Components\DateTimePicker::make('Pending_Start')
+                    ->label('Pending Since')
+                    ->disabled()
+                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING' && $get('Pending_Start') === null),
 
-                                                Forms\Components\Textarea::make('Pending_Reason')
-                                                    ->label('Reason for Pending')
-                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                                                    ->rows(2)
-                                                    ->placeholder('Explain why this ticket is being set to pending')
-                                                    ->columnSpanFull(),
-                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
+                Forms\Components\Textarea::make('Pending_Reason')
+                    ->label('Reason for Pending')
+                    ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
+                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING' && $get('Pending_Reason') === null)
+                    ->live()
+                    ->debounce(500)
+                    ->rows(2)
+                    ->placeholder('Explain why this ticket is being set to pending')
+                    ->columnSpanFull(),
+            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING' || $get('Pending_Reason') !== null || $get('Pending_Start') !== null),
 
-                                            // Closing Information
-                                            Group::make([
-                                                Forms\Components\Textarea::make('Action_Summry')
-                                                    ->label('Action Summary')
-                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                                                    ->rows(3)
-                                                    ->minLength(10)
-                                                    ->placeholder('Describe the actions taken to resolve this ticket')
-                                                    ->helperText('Required before closing the ticket. Minimum 10 characters.')
-                                                    ->columnSpanFull(),
+            // Closing Information
+            Group::make([
+                Forms\Components\Textarea::make('Action_Summry')
+                    ->label('Action Summary')
+                    ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
+                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
+                    ->rows(3)
+                    ->minLength(10)
+                    ->placeholder('Describe the actions taken to resolve this ticket')
+                    ->helperText('Required before closing the ticket. Minimum 10 characters.')
+                    ->columnSpanFull(),
 
-                                                Forms\Components\DateTimePicker::make('Closed_Time')
-                                                    ->label('Closed At')
-                                                    ->disabled()
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-                                        ]),
-                                    ]),
+                Forms\Components\DateTimePicker::make('Closed_Time')
+                    ->label('Closed At')
+                    ->disabled()
+                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+            ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+        ]),
+    ]),
 
                                 Tabs\Tab::make('Closed')
                                     ->icon('heroicon-o-check-circle')

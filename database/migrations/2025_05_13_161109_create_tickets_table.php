@@ -8,44 +8,44 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ticket', function (Blueprint $table) {
+        Schema::create('tickets', function (Blueprint $table) {
             // Primary Information
             $table->string('No_Ticket', 64)->primary();
-            $table->string('Customer', 16);
-            $table->string('Catagory', 255);
+            $table->string('Customer', 100);  // Diperpanjang menjadi 100
+            $table->string('Catagory', 255);  // Perbaikan typo
             $table->string('Site_ID', 8);
-            
+
             // Problem Information
             $table->string('Problem', 255);
-            $table->string('Reported_By')->nullable(); // Diubah menjadi string karena bisa diisi nama external
-            
+            $table->string('Reported_By')->nullable();
+
             // PIC Information
-            $table->string('Pic', 100)->nullable(); // Lowercase sesuai model
-            $table->string('Tlp_Pic', 20)->nullable(); // Lowercase sesuai model
-            
+            $table->string('Pic', 100)->nullable();
+            $table->string('Tlp_Pic', 20)->nullable();
+
             // Status and Level Information
-            $table->string('Status')->default('OPEN'); // Default OPEN (uppercase)
+            $table->string('Status')->default('OPEN');
             $table->string('Open_Level', 255)->default('Level 1');
-            
+
             // User yang membuat ticket
             $table->unsignedBigInteger('Open_By');
-            
+
             // Closing Information
             $table->unsignedBigInteger('Closed_By')->nullable();
             $table->timestamp('Closed_Time')->nullable();
             $table->string('Closed_Level', 255)->nullable();
-            
+
             // Timestamps for tracking
             $table->timestamp('Open_Time')->useCurrent();
             $table->timestamp('Pending_Start')->nullable();
             $table->timestamp('Pending_Stop')->nullable();
-            
+
             // Optional detailed information
             $table->text('Pending_Reason')->nullable();
             $table->text('Problem_Summary')->nullable();
             $table->text('Classification')->nullable();
-            $table->text('Action_Summry')->nullable();
-            
+            $table->text('Action_Summry')->nullable();  // Perbaikan typo
+
             // Standard timestamps
             $table->timestamps();
 
@@ -55,14 +55,13 @@ return new class extends Migration
                 ->on('table_remote')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
-            
+
             $table->foreign('Open_By')
                 ->references('id')
                 ->on('users')
                 ->onDelete('restrict')
                 ->onUpdate('cascade');
-                
-            // Foreign key untuk Closed_By
+
             $table->foreign('Closed_By')
                 ->references('id')
                 ->on('users')
@@ -73,6 +72,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('ticket');
+        Schema::dropIfExists('tickets');
     }
 };

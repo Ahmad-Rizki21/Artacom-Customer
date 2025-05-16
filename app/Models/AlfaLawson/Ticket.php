@@ -6,14 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\AlfaLawson\TableRemote;
 use App\Models\User;
+use App\Models\AlfaLawson\TicketAction;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-
 class Ticket extends Model
 {
-    protected $table = 'ticket';
+    protected $table = 'tickets';
     protected $primaryKey = 'No_Ticket';
     public $incrementing = false;
     protected $keyType = 'string';
@@ -56,37 +56,47 @@ class Ticket extends Model
         'updated_at' => 'datetime',
     ];
 
-    // Accessor untuk timer calculations
-    public function getOpenDurationAttribute(): string
+    // Revisi perhitungan durasi
+        public function getOpenDurationAttribute(): string
     {
         if (!$this->Open_Time) {
             return '00:00:00';
         }
 
+        $endTime = now();
+
         if ($this->Status === self::STATUS_PENDING) {
-            // Jika status pending, hitung sampai waktu pending dimulai
             $endTime = $this->Pending_Start ?? now();
         } elseif ($this->Status === self::STATUS_CLOSED) {
-            // Jika status closed, hitung sampai waktu closed
             $endTime = $this->Closed_Time;
-        } else {
-            // Jika masih open, hitung sampai sekarang
-            $endTime = now();
         }
 
         $seconds = $this->Open_Time->diffInSeconds($endTime);
+
+        if ($this->Status === self::STATUS_OPEN && $this->Pending_Start && $this->Pending_Stop) {
+            $pendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
+            $seconds = max(0, $seconds - $pendingSeconds);
+        }
+
         return $this->formatDuration($seconds);
     }
 
+
     public function getPendingDurationAttribute(): string
     {
-        if (!$this->Pending_Start || $this->Status !== self::STATUS_PENDING) {
+        if (!$this->Pending_Start) {
             return '00:00:00';
         }
 
-        $endTime = $this->Pending_Stop ?? now();
-        $seconds = $this->Pending_Start->diffInSeconds($endTime);
-        return $this->formatDuration($seconds);
+        $totalPendingSeconds = 0;
+
+        if ($this->Status === self::STATUS_PENDING) {
+            $totalPendingSeconds = $this->Pending_Start->diffInSeconds(now());
+        } elseif ($this->Pending_Stop) {
+            $totalPendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
+        }
+
+        return $this->formatDuration($totalPendingSeconds);
     }
 
     public function getTotalDurationAttribute(): string
@@ -95,7 +105,6 @@ class Ticket extends Model
             return '00:00:00';
         }
 
-        // Hitung total waktu dari pembukaan ticket
         $endTime = match($this->Status) {
             self::STATUS_CLOSED => $this->Closed_Time,
             default => now()
@@ -103,17 +112,15 @@ class Ticket extends Model
 
         $totalSeconds = $this->Open_Time->diffInSeconds($endTime);
 
-        // Kurangi waktu pending jika ada
-        if ($this->Pending_Start && $this->Pending_Stop) {
-            $pendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
-            $totalSeconds -= $pendingSeconds;
-        } elseif ($this->Status === self::STATUS_PENDING && $this->Pending_Start) {
-            // Jika masih pending, kurangi waktu pending sampai sekarang
+        if ($this->Status === self::STATUS_PENDING && $this->Pending_Start) {
             $pendingSeconds = $this->Pending_Start->diffInSeconds(now());
-            $totalSeconds -= $pendingSeconds;
+            $totalSeconds = max(0, $totalSeconds - $pendingSeconds);
+        } elseif ($this->Pending_Start && $this->Pending_Stop) {
+            $pendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
+            $totalSeconds = max(0, $totalSeconds - $pendingSeconds);
         }
 
-        return $this->formatDuration(max(0, $totalSeconds));
+        return $this->formatDuration($totalSeconds);
     }
 
     private function formatDuration(int $seconds): string
@@ -124,6 +131,7 @@ class Ticket extends Model
 
         return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
     }
+
 
     protected static function boot()
     {
@@ -274,6 +282,8 @@ class Ticket extends Model
             ->format('H:i:s');
     }
 
+    
+
     // Scopes
     public function scopeOpen($query)
     {
@@ -298,6 +308,11 @@ class Ticket extends Model
     public function scopeBySiteId($query, $siteId)
     {
         return $query->where('Site_ID', $siteId);
+    }
+
+    public function actions()
+    {
+        return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
     }
 
     public function scopeCreatedToday($query)

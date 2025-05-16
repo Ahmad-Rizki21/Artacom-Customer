@@ -17,6 +17,8 @@ use Filament\Forms\Components\Tabs;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 
@@ -98,11 +100,11 @@ class TicketResource extends Resource
                                 ->rows(3),
 
                             Forms\Components\TextInput::make('Reported_By')
-                                ->label('Reported By')
-                                ->placeholder('Name of reporter (optional)')
-                                ->maxLength(100)
-                                ->prefixIcon('heroicon-m-user'),
-
+                            ->label('Reported By')
+                            ->placeholder('Name of reporter (optional)')
+                            ->maxLength(100)
+                            ->prefixIcon('heroicon-m-user')
+                            ->default('-'),
                             Forms\Components\TextInput::make('pic')
                                 ->label('PIC Name')
                                 ->maxLength(100)
@@ -223,7 +225,9 @@ class TicketResource extends Resource
                                                 ->rows(3),
 
                                             Forms\Components\TextInput::make('Reported_By')
-                                                ->prefixIcon('heroicon-m-user'),
+                                            ->prefixIcon('heroicon-m-user')
+                                            ->formatStateUsing(fn ($state) => $state ?? '-')
+                                            ->default('-'),
 
                                             Forms\Components\TextInput::make('pic')
                                                 ->label('PIC Name')
@@ -248,14 +252,6 @@ class TicketResource extends Resource
     ->icon('heroicon-o-clock')
     ->schema([
         Grid::make(2)->schema([
-            // Gunakan Livewire component dengan properti record yang dievaluasi
-            \Filament\Forms\Components\Livewire::make(\App\Filament\Components\TicketTimer::class, function ($livewire) {
-                // Akses record dari konteks Livewire atau form
-                $record = $livewire->getRecord();
-                return ['record' => $record];
-            })
-                ->columnSpan(2),
-
             // Open Time Information
             Group::make([
                 Forms\Components\DateTimePicker::make('Open_Time')
@@ -275,30 +271,22 @@ class TicketResource extends Resource
                 Forms\Components\DateTimePicker::make('Pending_Start')
                     ->label('Pending Since')
                     ->disabled()
-                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING' && $get('Pending_Start') === null),
+                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING'),
 
                 Forms\Components\Textarea::make('Pending_Reason')
                     ->label('Reason for Pending')
                     ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING' && $get('Pending_Reason') === null)
-                    ->live()
-                    ->debounce(500)
-                    ->rows(2)
-                    ->placeholder('Explain why this ticket is being set to pending')
-                    ->columnSpanFull(),
-            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING' || $get('Pending_Reason') !== null || $get('Pending_Start') !== null),
+                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING')
+                    ->rows(2),
+            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
 
-            // Closing Information
-            Group::make([
+                                        // Closing Information
+                                        Group::make([
                 Forms\Components\Textarea::make('Action_Summry')
                     ->label('Action Summary')
                     ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
                     ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                    ->rows(3)
-                    ->minLength(10)
-                    ->placeholder('Describe the actions taken to resolve this ticket')
-                    ->helperText('Required before closing the ticket. Minimum 10 characters.')
-                    ->columnSpanFull(),
+                    ->rows(3),
 
                 Forms\Components\DateTimePicker::make('Closed_Time')
                     ->label('Closed At')
@@ -306,7 +294,7 @@ class TicketResource extends Resource
                     ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
             ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
         ]),
-    ]),
+                                ]),
 
                                 Tabs\Tab::make('Closed')
                                     ->icon('heroicon-o-check-circle')

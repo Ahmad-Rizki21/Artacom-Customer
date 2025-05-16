@@ -14,6 +14,7 @@
         "cheesegrits/filament-google-maps": "^3.0",
         "codewithdennis/filament-simple-map": "^3.0",
         "cornford/googlmapper": "^2.8",
+        "doctrine/dbal": "^4.2",
         "dotswan/filament-map-picker": "^1.8",
         "filament/actions": "^3.3",
         "filament/filament": "^3.3",

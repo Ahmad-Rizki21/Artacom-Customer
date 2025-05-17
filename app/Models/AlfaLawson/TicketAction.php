@@ -8,7 +8,18 @@ class TicketAction extends Model
 {
     protected $table = 'ticket_actions';
 
-    protected $fillable = ['No_Ticket', 'Action_Taken', 'Action_Time', 'Action_By', 'Action_Level'];
+    protected $fillable = [
+        'No_Ticket', 
+        'Action_Taken', 
+        'Action_Time', 
+        'Action_By', 
+        'Action_Level', 
+        'Action_Description'
+    ];
+
+    protected $casts = [
+        'Action_Time' => 'datetime', // Automatically casts to Carbon instance
+    ];
 
     public function ticket()
     {

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+
 class Ticket extends Model
 {
     protected $table = 'tickets';
@@ -30,8 +31,8 @@ class Ticket extends Model
         'Site_ID',
         'Problem',
         'Reported_By',
-        'pic',           
-        'tlp_pic',      
+        'pic',
+        'tlp_pic',
         'Status',
         'Open_By',
         'Open_Level',
@@ -57,7 +58,7 @@ class Ticket extends Model
     ];
 
     // Revisi perhitungan durasi
-        public function getOpenDurationAttribute(): string
+    public function getOpenDurationAttribute(): string
     {
         if (!$this->Open_Time) {
             return '00:00:00';
@@ -80,7 +81,6 @@ class Ticket extends Model
 
         return $this->formatDuration($seconds);
     }
-
 
     public function getPendingDurationAttribute(): string
     {
@@ -132,16 +132,15 @@ class Ticket extends Model
         return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
     }
 
-
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($model) {
             if (!$model->No_Ticket) {
                 $model->No_Ticket = static::generateTicketNumber();
             }
-            
+
             $model->Status = static::STATUS_OPEN;
             $model->Open_By = Auth::id();
             $model->Open_Time = now();
@@ -159,7 +158,6 @@ class Ticket extends Model
                     case static::STATUS_PENDING:
                         $model->Pending_Start = now();
                         $model->Pending_Stop = null;
-                        // Tambahkan log untuk debugging
                         Log::info("Pending Reason: " . ($model->Pending_Reason ?? 'null'));
                         if (empty(trim($model->Pending_Reason))) {
                             throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
@@ -199,12 +197,11 @@ class Ticket extends Model
         if (!$lastTicket) {
             return self::TICKET_PREFIX . '0000001';
         }
-        
+
         $lastNumber = intval(substr($lastTicket->No_Ticket, 3));
         $newNumber = str_pad($lastNumber + 1, 7, '0', STR_PAD_LEFT);
         return self::TICKET_PREFIX . $newNumber;
     }
-    
 
     // Relationships
     public function remote(): BelongsTo
@@ -237,14 +234,13 @@ class Ticket extends Model
         return $this->openedBy?->name ?? 'Unknown User';
     }
 
-
     // Accessors & Mutators
     public function getStatusColorAttribute(): string
     {
         return match($this->Status) {
-            static::STATUS_OPEN => 'warning', // kuning
-            static::STATUS_PENDING => 'info',  // biru
-            static::STATUS_CLOSED => 'success', // hijau
+            static::STATUS_OPEN => 'warning',
+            static::STATUS_PENDING => 'info',
+            static::STATUS_CLOSED => 'success',
             default => 'secondary'
         };
     }
@@ -282,8 +278,6 @@ class Ticket extends Model
             ->format('H:i:s');
     }
 
-    
-
     // Scopes
     public function scopeOpen($query)
     {
@@ -309,6 +303,7 @@ class Ticket extends Model
     {
         return $query->where('Site_ID', $siteId);
     }
+
 
     public function actions()
     {

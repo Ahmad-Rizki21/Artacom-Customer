@@ -25,6 +25,7 @@
         "larswiegers/laravel-maps": "^0.19.0",
         "livewire/livewire": "^3.6",
         "maatwebsite/excel": "^3.1",
+        "nesbot/carbon": "^3.9",
         "nuxtifyts/dash-stack-theme": "^1.2",
         "openspout/openspout": "^4.28",
         "phpoffice/phpspreadsheet": "^1.29",

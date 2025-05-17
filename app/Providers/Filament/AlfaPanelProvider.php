@@ -51,6 +51,8 @@ class AlfaPanelProvider extends PanelProvider
                 fn
                  () => view('components.login-branding')
             )
+
+            
            
             // ->navigationItems([
             //     NavigationItem::make()

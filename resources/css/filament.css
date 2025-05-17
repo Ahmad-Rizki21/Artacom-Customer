@@ -1,0 +1,8 @@
+@layer components {
+    .filament-timeline-command-output {
+        @apply bg-secondary dark:bg-gray-800;
+    }
+    .filament-timeline-command-text {
+        @apply text-gray-900 dark:text-gray-200;
+    }
+}

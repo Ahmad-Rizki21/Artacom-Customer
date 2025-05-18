@@ -19,6 +19,7 @@
         "vite": "^5.2.0"
     },
     "dependencies": {
+        "alpinejs": "^3.14.9",
         "leaflet": "^1.9.4",
         "leaflet.markercluster": "^1.5.3",
         "react": "^19.0.0-rc.1",

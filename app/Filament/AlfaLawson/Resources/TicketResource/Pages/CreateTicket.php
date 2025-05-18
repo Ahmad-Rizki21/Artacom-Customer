@@ -20,13 +20,9 @@ class CreateTicket extends CreateRecord
         return $data;
     }
 
-    /**
-     * The URL to redirect to after a new record is created.
-     *
-     * @return string
-    */
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        // Redirect ke halaman view setelah create
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
     }
 }

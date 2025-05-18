@@ -15,6 +15,8 @@ class EditTicket extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\ViewAction::make()
+                ->url(fn () => $this->getResource()::getUrl('view', ['record' => $this->record])),
             Actions\DeleteAction::make(),
         ];
     }

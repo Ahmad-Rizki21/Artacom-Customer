@@ -1,13 +1,15 @@
 @php
-    // Ensure $record is available and fetch actions
     $actions = isset($record) ? $record->actions()->orderBy('Action_Time', 'desc')->get() : collect([]);
+    $user = auth()->user();
 @endphp
 
 <div class="relative timeline-container">
+    <!-- Render Livewire Component -->
+    <livewire:edit-action-modal />
+
     @if ($actions->count() > 0)
         @foreach ($actions as $action)
-            <div class="flex items-start mb-6 relative">
-                {{-- Timeline Dot and Line --}}
+            <div class="flex items-start mb-6 relative group">
                 <div class="flex-shrink-0 w-8">
                     <div @class([
                         'flex items-center justify-center w-8 h-8 rounded-full shadow-sm border-2 transition-colors duration-200',
@@ -51,10 +53,8 @@
                     @endif
                 </div>
 
-                {{-- Content --}}
                 <div class="ml-4 flex-grow">
-                    {{-- Status Badge --}}
-                    <div class="mb-2">
+                    <div class="mb-2 flex justify-between items-center">
                         @switch($action->Action_Taken)
                             @case('Completed')
                             @case('Closed')
@@ -78,7 +78,7 @@
                                     <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/>
                                     </svg>
-                                    Active {{ $action->Action_Time->format('d M Y H:i') }}
+                                    Open {{ $action->Action_Time->format('d M Y H:i') }}
                                 </span>
                                 @break
                             @case('Note')
@@ -97,48 +97,56 @@
                                     {{ $action->Action_Taken }} {{ $action->Action_Time->format('d M Y H:i') }}
                                 </span>
                         @endswitch
+
+                        @if($user->name === $action->Action_By || $user->Level === 'Admin')
+                            <button 
+                                wire:click="$dispatch('openEditModal', { actionId: '{{ $action->id }}', ticketId: '{{ $record->No_Ticket }}' })"
+                                class="opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-500 hover:text-primary-500"
+                                title="Edit Action"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </button>
+                        @endif
                     </div>
 
-                    {{-- Content Card --}}
                     <div @class([
                         'border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200',
-                        'bg-success border-success' => $action->Action_Taken === 'Completed' || $action->Action_Taken === 'Closed',
-                        'bg-info border-info' => $action->Action_Taken === 'Pending Clock',
-                        'bg-primary border-primary' => $action->Action_Taken === 'Start Clock',
-                        'bg-secondary border-secondary' => $action->Action_Taken === 'Note',
+                        'bg-success-50 border-success-200 dark:bg-success-900/20 dark:border-success-700' => $action->Action_Taken === 'Completed' || $action->Action_Taken === 'Closed',
+                        'bg-info-50 border-info-200 dark:bg-info-900/20 dark:border-info-700' => $action->Action_Taken === 'Pending Clock',
+                        'bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-700' => $action->Action_Taken === 'Start Clock',
+                        'bg-secondary-50 border-secondary-200 dark:bg-secondary-900/20 dark:border-secondary-700' => $action->Action_Taken === 'Note',
                         'bg-card border-card' => !in_array($action->Action_Taken, ['Completed', 'Closed', 'Pending Clock', 'Start Clock', 'Note'])
                     ])>
                         @php
-                            // Improved detection for command output
-                            $isCommandOutput = 
-                                preg_match('/(\r\n|\n|\r|\t)/', $action->Action_Description) || 
+                            $isCommandOutput = preg_match('/(\r\n|\n|\r|\t)/', $action->Action_Description) || 
                                 preg_match('/(C:\\\\|ping |\/home\/|reply from|ms TTL=|Pinging|PING|packets transmitted|received)/i', $action->Action_Description) ||
                                 preg_match('/(tracert|traceroute|nslookup|dig @|whois|netstat|\$ |# |> |C:\\>)/i', $action->Action_Description);
                         @endphp
 
                         @if($isCommandOutput)
-    <div class="p-1">
-        <div class="filament-timeline-command-output rounded-md p-2 overflow-x-auto font-mono dark:bg-gray-800">
-            <pre class="filament-timeline-command-text text-sm whitespace-pre-wrap break-all overflow-x-auto dark:text-gray-200">{{ $action->Action_Description }}</pre>
-        </div>
-    </div>
-@else
-    <div class="p-4">
-        <div class="prose prose-sm max-w-none text-sm whitespace-pre-line text-gray-900 dark:text-gray-200">
-            {{ $action->Action_Description }}
-        </div>
-    </div>
-@endif
+                            <div class="p-1">
+                                <div class="filament-timeline-command-output rounded-md p-2 overflow-x-auto font-mono dark:bg-gray-800">
+                                    <pre class="filament-timeline-command-text text-sm whitespace-pre-wrap break-all overflow-x-auto dark:text-gray-200">{{ $action->Action_Description }}</pre>
+                                </div>
+                            </div>
+                        @else
+                            <div class="p-4">
+                                <div class="prose prose-sm max-w-none text-sm whitespace-pre-line text-gray-900 dark:text-gray-200">
+                                    {{ $action->Action_Description }}
+                                </div>
+                            </div>
+                        @endif
 
-                        {{-- Footer --}}
                         <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                 </svg>
                                 <span>{{ $action->Action_By }}</span>
-                                @if ($action->Action_Level)
-                                    <span class="ml-2 text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                                @if($action->Action_Level)
+                                    <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                                         {{ $action->Action_Level }}
                                     </span>
                                 @endif
@@ -166,3 +174,14 @@
         </div>
     @endif
 </div>
+
+@push('scripts')
+    <script>
+        document.addEventListener('livewire:initialized', () => {
+            Livewire.on('actionUpdated', () => {
+                console.log('Action updated, refreshing UI');
+                location.reload(); // Refresh halaman untuk melihat perubahan
+            });
+        });
+    </script>
+@endpush

@@ -57,84 +57,21 @@ class Ticket extends Model
         'updated_at' => 'datetime',
     ];
 
-    // Revisi perhitungan durasi
-    public function getOpenDurationAttribute(): string
-    {
-        if (!$this->Open_Time) {
-            return '00:00:00';
-        }
-
-        $endTime = now();
-
-        if ($this->Status === self::STATUS_PENDING) {
-            $endTime = $this->Pending_Start ?? now();
-        } elseif ($this->Status === self::STATUS_CLOSED) {
-            $endTime = $this->Closed_Time;
-        }
-
-        $seconds = $this->Open_Time->diffInSeconds($endTime);
-
-        if ($this->Status === self::STATUS_OPEN && $this->Pending_Start && $this->Pending_Stop) {
-            $pendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
-            $seconds = max(0, $seconds - $pendingSeconds);
-        }
-
-        return $this->formatDuration($seconds);
-    }
-
-    public function getPendingDurationAttribute(): string
-    {
-        if (!$this->Pending_Start) {
-            return '00:00:00';
-        }
-
-        $totalPendingSeconds = 0;
-
-        if ($this->Status === self::STATUS_PENDING) {
-            $totalPendingSeconds = $this->Pending_Start->diffInSeconds(now());
-        } elseif ($this->Pending_Stop) {
-            $totalPendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
-        }
-
-        return $this->formatDuration($totalPendingSeconds);
-    }
-
-    public function getTotalDurationAttribute(): string
-    {
-        if (!$this->Open_Time) {
-            return '00:00:00';
-        }
-
-        $endTime = match($this->Status) {
-            self::STATUS_CLOSED => $this->Closed_Time,
-            default => now()
-        };
-
-        $totalSeconds = $this->Open_Time->diffInSeconds($endTime);
-
-        if ($this->Status === self::STATUS_PENDING && $this->Pending_Start) {
-            $pendingSeconds = $this->Pending_Start->diffInSeconds(now());
-            $totalSeconds = max(0, $totalSeconds - $pendingSeconds);
-        } elseif ($this->Pending_Start && $this->Pending_Stop) {
-            $pendingSeconds = $this->Pending_Start->diffInSeconds($this->Pending_Stop);
-            $totalSeconds = max(0, $totalSeconds - $pendingSeconds);
-        }
-
-        return $this->formatDuration($totalSeconds);
-    }
-
-    private function formatDuration(int $seconds): string
-    {
-        $hours = floor($seconds / 3600);
-        $minutes = floor(($seconds % 3600) / 60);
-        $seconds = $seconds % 60;
-
-        return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
-    }
-
     protected static function boot()
     {
         parent::boot();
+
+        static::created(function ($model) {
+        // Automatically create an "Open" action when ticket is created
+        TicketAction::create([
+            'No_Ticket' => $model->No_Ticket,
+            'Action_Taken' => 'Start Clock',
+            'Action_Time' => $model->Open_Time,
+            'Action_By' => $model->openedBy->name ?? Auth::user()->name,
+            'Action_Level' => $model->Open_Level, // Use the ticket's Open_Level
+            'Action_Description' => $model->Problem
+        ]);
+        });
 
         static::creating(function ($model) {
             if (!$model->No_Ticket) {
@@ -145,6 +82,9 @@ class Ticket extends Model
             $model->Open_By = Auth::id();
             $model->Open_Time = now();
             $model->Reported_By = $model->Reported_By ?: Auth::id();
+            
+            // Set Open_Level from the user's Level
+            $model->Open_Level = Auth::user()->Level ?? 'Level 1';
 
             Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
         });
@@ -158,7 +98,6 @@ class Ticket extends Model
                     case static::STATUS_PENDING:
                         $model->Pending_Start = now();
                         $model->Pending_Stop = null;
-                        Log::info("Pending Reason: " . ($model->Pending_Reason ?? 'null'));
                         if (empty(trim($model->Pending_Reason))) {
                             throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
                         }
@@ -184,23 +123,68 @@ class Ticket extends Model
                         }
                         break;
                 }
-
-                Log::info("Ticket {$model->No_Ticket} status changed from {$oldStatus} to {$newStatus} by " . Auth::user()->name);
             }
         });
     }
 
-    // Static Methods
-    public static function generateTicketNumber(): string
+    // Duration calculations
+    public function getOpenDurationAttribute(): string
     {
-        $lastTicket = static::orderBy('created_at', 'desc')->first();
-        if (!$lastTicket) {
-            return self::TICKET_PREFIX . '0000001';
+        if (!$this->Open_Time) return '00:00:00';
+
+        $endTime = match($this->Status) {
+            self::STATUS_PENDING => $this->Pending_Start ?? now(),
+            self::STATUS_CLOSED => $this->Closed_Time,
+            default => now()
+        };
+
+        $seconds = $this->Open_Time->diffInSeconds($endTime);
+
+        if ($this->Status === self::STATUS_OPEN && $this->Pending_Start && $this->Pending_Stop) {
+            $seconds -= $this->Pending_Start->diffInSeconds($this->Pending_Stop);
         }
 
-        $lastNumber = intval(substr($lastTicket->No_Ticket, 3));
-        $newNumber = str_pad($lastNumber + 1, 7, '0', STR_PAD_LEFT);
-        return self::TICKET_PREFIX . $newNumber;
+        return $this->formatDuration(max(0, $seconds));
+    }
+
+    public function getPendingDurationAttribute(): string
+    {
+        if (!$this->Pending_Start) return '00:00:00';
+
+        $seconds = $this->Status === self::STATUS_PENDING
+            ? $this->Pending_Start->diffInSeconds(now())
+            : ($this->Pending_Stop ? $this->Pending_Start->diffInSeconds($this->Pending_Stop) : 0);
+
+        return $this->formatDuration($seconds);
+    }
+
+    public function getTotalDurationAttribute(): string
+    {
+        if (!$this->Open_Time) return '00:00:00';
+
+        $endTime = $this->Status === self::STATUS_CLOSED 
+            ? $this->Closed_Time 
+            : now();
+
+        $seconds = $this->Open_Time->diffInSeconds($endTime);
+
+        if ($this->Pending_Start) {
+            $pendingEnd = $this->Status === self::STATUS_PENDING 
+                ? now() 
+                : ($this->Pending_Stop ?: $this->Open_Time);
+            $seconds -= $this->Pending_Start->diffInSeconds($pendingEnd);
+        }
+
+        return $this->formatDuration(max(0, $seconds));
+    }
+
+    private function formatDuration(int $seconds): string
+    {
+        return sprintf('%02d:%02d:%02d', 
+            floor($seconds / 3600), 
+            floor(($seconds % 3600) / 60), 
+            $seconds % 60
+        );
     }
 
     // Relationships
@@ -229,89 +213,41 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'Closed_By', 'id');
     }
 
-    public function getOpenedByNameAttribute(): string
-    {
-        return $this->openedBy?->name ?? 'Unknown User';
-    }
-
-    // Accessors & Mutators
-    public function getStatusColorAttribute(): string
-    {
-        return match($this->Status) {
-            static::STATUS_OPEN => 'warning',
-            static::STATUS_PENDING => 'info',
-            static::STATUS_CLOSED => 'success',
-            default => 'secondary'
-        };
-    }
-
-    // Helper Methods
-    public function isPending(): bool
-    {
-        return $this->Status === static::STATUS_PENDING;
-    }
-
-    public function isClosed(): bool
-    {
-        return $this->Status === static::STATUS_CLOSED;
-    }
-
-    public function isOpen(): bool
-    {
-        return $this->Status === static::STATUS_OPEN;
-    }
-
-    public function getResolutionTimeAttribute(): ?string
-    {
-        if (!$this->Open_Time || !$this->Closed_Time) {
-            return null;
-        }
-
-        $duration = $this->Open_Time->diffInMinutes($this->Closed_Time);
-        if ($this->Pending_Start && $this->Pending_Stop) {
-            $pendingDuration = $this->Pending_Start->diffInMinutes($this->Pending_Stop);
-            $duration -= $pendingDuration;
-        }
-
-        return Carbon::createFromTimestamp(0)
-            ->addMinutes($duration)
-            ->format('H:i:s');
-    }
-
-    // Scopes
-    public function scopeOpen($query)
-    {
-        return $query->where('Status', static::STATUS_OPEN);
-    }
-
-    public function scopePending($query)
-    {
-        return $query->where('Status', static::STATUS_PENDING);
-    }
-
-    public function scopeClosed($query)
-    {
-        return $query->where('Status', static::STATUS_CLOSED);
-    }
-
-    public function scopeByCustomer($query, $customer)
-    {
-        return $query->where('Customer', $customer);
-    }
-
-    public function scopeBySiteId($query, $siteId)
-    {
-        return $query->where('Site_ID', $siteId);
-    }
-
-
     public function actions()
     {
         return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
     }
 
-    public function scopeCreatedToday($query)
+    // Helpers
+    public function isOpen(): bool { return $this->Status === self::STATUS_OPEN; }
+    public function isPending(): bool { return $this->Status === self::STATUS_PENDING; }
+    public function isClosed(): bool { return $this->Status === self::STATUS_CLOSED; }
+
+    public function getStatusColorAttribute(): string
     {
-        return $query->whereDate('created_at', Carbon::today());
+        return match($this->Status) {
+            self::STATUS_OPEN => 'warning',
+            self::STATUS_PENDING => 'info',
+            self::STATUS_CLOSED => 'success',
+            default => 'secondary'
+        };
+    }
+
+    // Scopes
+    public function scopeOpen($query) { return $query->where('Status', self::STATUS_OPEN); }
+    public function scopePending($query) { return $query->where('Status', self::STATUS_PENDING); }
+    public function scopeClosed($query) { return $query->where('Status', self::STATUS_CLOSED); }
+    public function scopeByCustomer($query, $customer) { return $query->where('Customer', $customer); }
+    public function scopeBySiteId($query, $siteId) { return $query->where('Site_ID', $siteId); }
+    public function scopeCreatedToday($query) { return $query->whereDate('created_at', Carbon::today()); }
+
+    // Static
+    public static function generateTicketNumber(): string
+    {
+        $lastNumber = (int) substr(
+            static::orderBy('created_at', 'desc')->value('No_Ticket') ?? self::TICKET_PREFIX.'0000000',
+            3
+        );
+        return self::TICKET_PREFIX . str_pad($lastNumber + 1, 7, '0', STR_PAD_LEFT);
     }
 }

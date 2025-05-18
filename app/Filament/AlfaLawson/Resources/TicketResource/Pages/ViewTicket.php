@@ -11,12 +11,13 @@ use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\ViewEntry;
 use App\Models\AlfaLawson\TicketAction;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
-use Illuminate\Support\Facades\Log;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Form;
 
 class ViewTicket extends ViewRecord
 {
@@ -25,7 +26,8 @@ class ViewTicket extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make(),
+            Actions\EditAction::make()
+                ->url(fn () => $this->getResource()::getUrl('edit', ['record' => $this->record])),
             Actions\DeleteAction::make(),
             Actions\Action::make('addAction')
                 ->label('Add Action')
@@ -46,54 +48,29 @@ class ViewTicket extends ViewRecord
                 ])
                 ->action(function (array $data) {
                     $ticket = $this->record;
-
                     try {
-                        // Create the ticket action
                         TicketAction::create([
                             'No_Ticket' => $ticket->No_Ticket,
                             'Action_Taken' => $data['new_action_status'],
                             'Action_Time' => now(),
                             'Action_By' => Auth::user()->name,
-                            'Action_Level' => null, // Leave as NULL, derive from User model if needed
-                            'Action_Description' => $data['new_action_description'], // Store description here
+                            'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                            'Action_Description' => $data['new_action_description'],
                         ]);
 
-                        // Only update ticket status if it's not a note
                         if ($data['new_action_status'] !== 'Note') {
                             if ($data['new_action_status'] === 'Pending Clock') {
-                                $ticket->update([
-                                    'Status' => 'PENDING',
-                                    'Pending_Start' => now(),
-                                    'Pending_Reason' => $data['new_action_description']
-                                ]);
+                                $ticket->update(['Status' => 'PENDING', 'Pending_Start' => now(), 'Pending_Reason' => $data['new_action_description']]);
                             } elseif ($data['new_action_status'] === 'Start Clock') {
-                                $ticket->update([
-                                    'Status' => 'OPEN',
-                                    'Pending_Stop' => now()
-                                ]);
+                                $ticket->update(['Status' => 'OPEN', 'Pending_End' => now()]);
                             } elseif ($data['new_action_status'] === 'Closed') {
-                                $ticket->update([
-                                    'Status' => 'CLOSED',
-                                    'Closed_Time' => now(),
-                                    'Action_Summry' => $data['new_action_description']
-                                ]);
+                                $ticket->update(['Status' => 'CLOSED', 'Closed_Time' => now(), 'Action_Summry' => $data['new_action_description']]);
                             }
                         }
 
-                        Notification::make()
-                            ->success()
-                            ->title($data['new_action_status'] === 'Note' ? 'Note added successfully' : 'Action added successfully')
-                            ->send();
-
-                        return redirect()->to($this->getResource()::getUrl('view', ['record' => $ticket]));
-
+                        Notification::make()->success()->title('Action added successfully')->send();
                     } catch (\Exception $e) {
-                        Notification::make()
-                            ->danger()
-                            ->title('Error adding action')
-                            ->body($e->getMessage())
-                            ->send();
-
+                        Notification::make()->danger()->title('Error adding action')->body($e->getMessage())->send();
                         throw new Halt();
                     }
                 })
@@ -102,30 +79,6 @@ class ViewTicket extends ViewRecord
 
     public function infolist(Infolist $infolist): Infolist
     {
-        $ticket = $this->record;
-
-        // Set initial status to "Open Clock" and create initial action if not exists
-        if ($ticket->actions()->where('Action_Taken', 'Start Clock')->doesntExist() && $ticket->Status === null) {
-            try {
-                $ticket->update([
-                    'Status' => 'OPEN',
-                    'Open_Time' => now(),
-                ]);
-                TicketAction::create([
-                    'No_Ticket' => $ticket->No_Ticket,
-                    'Action_Taken' => 'Start Clock',
-                    'Action_Level' => null, // Leave as NULL
-                    'Action_Description' => $ticket->Problem, // Move problem to description
-                    'Action_By' => Auth::user()->name ?? 'system',
-                    'Action_Time' => $ticket->Open_Time,
-                ]);
-
-                Log::info("Initial TicketAction created for ticket {$ticket->No_Ticket} on view: Action_Description = {$ticket->Problem}");
-            } catch (\Exception $e) {
-                Log::error("Failed to create initial TicketAction for ticket {$ticket->No_Ticket} on view: " . $e->getMessage());
-            }
-        }
-
         return $infolist
             ->schema([
                 \Filament\Infolists\Components\Grid::make(3)
@@ -164,11 +117,11 @@ class ViewTicket extends ViewRecord
                                     ->columns(2),
 
                                 Section::make('Progress History')
-                                ->schema([
-                                    ViewEntry::make('progress_timeline')
-                                        ->view('filament.resources.ticket-progress-timeline')
-                                        ->viewData(['record' => $this->record])
-                                ])
+                                    ->schema([
+                                        ViewEntry::make('progress_timeline')
+                                            ->view('filament.resources.ticket-progress-timeline')
+                                            ->viewData(['record' => $this->record, 'livewire' => $this])
+                                    ]),
                             ]),
 
                         Section::make('Timer Information')
@@ -176,9 +129,7 @@ class ViewTicket extends ViewRecord
                             ->schema([
                                 ViewEntry::make('timer')
                                     ->view('components.ticket-timer')
-                                    ->viewData([
-                                        'record' => $this->record
-                                    ])
+                                    ->viewData(['record' => $this->record])
                             ]),
                     ]),
             ]);

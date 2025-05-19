@@ -20,8 +20,12 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Navigation\NavigationItem;
 use Filament\Navigation\NavigationGroup;
 use App\Filament\AlfaLawson\Widgets\AlfaLawsonDCMapWidget;
+use App\Filament\AlfaLawson\Widgets\MonthlyTicketChart;
+use App\Filament\AlfaLawson\Widgets\StatsAlfaLawsonRemoteOverview;
+
 use App\Filament\AlfaLawson\Widgets\DCMapWidget;
 use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
+use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
 
 class AlfaPanelProvider extends PanelProvider
 {
@@ -119,6 +123,8 @@ class AlfaPanelProvider extends PanelProvider
             ->widgets([
                 // Widgets\AlfaLawsonDCMapWidget::class,
                 AlfaLawsonDCMapWidget::class,
+                StatsAlfaLawsonRemoteOverview::class,
+                MonthlyTicketChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -146,6 +152,7 @@ class AlfaPanelProvider extends PanelProvider
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
                 FilamentBackgroundsPlugin::make()
                 ->showAttribution(false),
+                FilamentApexChartsPlugin::make()
             ]);
             
     }

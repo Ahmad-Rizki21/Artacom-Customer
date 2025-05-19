@@ -9,7 +9,7 @@ class AlfaLawsonDCMapWidget extends Widget
 {
     protected static string $view = 'filament.widgets.alfa-lawson-dc-map-widget';
     
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 2;
     protected static bool $isLazy = false;
     protected int | string | array $columnSpan = 'full';
     

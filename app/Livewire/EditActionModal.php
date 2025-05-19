@@ -72,6 +72,11 @@ class EditActionModal extends Component
         $this->resetForm();
     }
 
+    public function log($message)
+    {
+        Log::info($message);
+    }
+
     private function resetForm()
     {
         $this->actionId = null;

@@ -62,15 +62,15 @@ class Ticket extends Model
         parent::boot();
 
         static::created(function ($model) {
-        // Automatically create an "Open" action when ticket is created
-        TicketAction::create([
-            'No_Ticket' => $model->No_Ticket,
-            'Action_Taken' => 'Start Clock',
-            'Action_Time' => $model->Open_Time,
-            'Action_By' => $model->openedBy->name ?? Auth::user()->name,
-            'Action_Level' => $model->Open_Level, // Use the ticket's Open_Level
-            'Action_Description' => $model->Problem
-        ]);
+            // Automatically create an "Open" action when ticket is created
+            TicketAction::create([
+                'No_Ticket' => $model->No_Ticket,
+                'Action_Taken' => 'Start Clock',
+                'Action_Time' => $model->Open_Time,
+                'Action_By' => $model->openedBy->name ?? Auth::user()->name,
+                'Action_Level' => $model->Open_Level, // Use the ticket's Open_Level
+                'Action_Description' => $model->Problem
+            ]);
         });
 
         static::creating(function ($model) {
@@ -90,41 +90,39 @@ class Ticket extends Model
         });
 
         static::updating(function ($model) {
-            if ($model->isDirty('Status')) {
-                $oldStatus = $model->getOriginal('Status');
-                $newStatus = $model->Status;
+                if ($model->isDirty('Status')) {
+                    $oldStatus = $model->getOriginal('Status');
+                    $newStatus = $model->Status;
 
-                switch ($newStatus) {
-                    case static::STATUS_PENDING:
-                        $model->Pending_Start = now();
-                        $model->Pending_Stop = null;
-                        if (empty(trim($model->Pending_Reason))) {
-                            throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
-                        }
-                        break;
+                    switch ($newStatus) {
+                        case static::STATUS_PENDING:
+                            $model->Pending_Start = now();
+                            $model->Pending_Stop = null;
+                            if (empty(trim($model->Pending_Reason))) {
+                                throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
+                            }
+                            break;
 
-                    case static::STATUS_CLOSED:
-                        if (empty(trim($model->Action_Summry))) {
-                            throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
-                        }
-                        if (strlen(trim($model->Action_Summry)) < 10) {
-                            throw new \Exception('Action Summary terlalu singkat, mohon berikan penjelasan yang lebih detail');
-                        }
-                        $model->Closed_Time = now();
-                        $model->Closed_By = Auth::id();
-                        if ($oldStatus === static::STATUS_PENDING) {
-                            $model->Pending_Stop = now();
-                        }
-                        break;
+                        case static::STATUS_CLOSED:
+                            if (empty(trim($model->Action_Summry))) {
+                                throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
+                            }
+                            // Remove the length check (strlen < 10)
+                            $model->Closed_Time = now();
+                            $model->Closed_By = Auth::id();
+                            if ($oldStatus === static::STATUS_PENDING) {
+                                $model->Pending_Stop = now();
+                            }
+                            break;
 
-                    case static::STATUS_OPEN:
-                        if ($oldStatus === static::STATUS_PENDING) {
-                            $model->Pending_Stop = now();
-                        }
-                        break;
+                        case static::STATUS_OPEN:
+                            if ($oldStatus === static::STATUS_PENDING) {
+                                $model->Pending_Stop = now();
+                            }
+                            break;
+                    }
                 }
-            }
-        });
+            });
     }
 
     // Duration calculations
@@ -216,6 +214,81 @@ class Ticket extends Model
     public function actions()
     {
         return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
+    }
+
+    // Method to update an action (for EditActionModal)
+    public function updateAction($actionId, array $data)
+    {
+        // Validasi data yang masuk
+        if (!isset($data['action_taken']) || !isset($data['action_description'])) {
+            throw new \Exception('Action Taken dan Action Description harus diisi.');
+        }
+
+        // Cari action berdasarkan ID
+        $action = $this->actions()->findOrFail($actionId);
+
+        // Simpan nilai sebelumnya untuk perbandingan
+        $oldActionTaken = $action->Action_Taken;
+        $newActionTaken = $data['action_taken'];
+
+        // Update data action
+        $action->update([
+            'Action_Taken' => $newActionTaken,
+            'Action_Description' => $data['action_description'],
+            'Action_Time' => now(), // Update waktu aksi
+            'Action_By' => Auth::user()->name,
+            'Action_Level' => Auth::user()->Level ?? 'Level 1',
+        ]);
+
+        // Jika Action_Taken berubah, perbarui status ticket sesuai logika
+        if ($oldActionTaken !== $newActionTaken) {
+            switch ($newActionTaken) {
+                case 'Pending Clock':
+                    $this->Status = self::STATUS_PENDING;
+                    $this->Pending_Reason = $data['action_description'];
+                    $this->Pending_Start = now();
+                    $this->Pending_Stop = null;
+                    break;
+
+                case 'Start Clock':
+                    $this->Status = self::STATUS_OPEN;
+                    if ($oldActionTaken === 'Pending Clock') {
+                        $this->Pending_Stop = now();
+                    }
+                    break;
+
+                case 'Closed':
+                    if (empty(trim($data['action_description']))) {
+                        throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
+                    }
+                    $this->Status = self::STATUS_CLOSED;
+                    $this->Action_Summry = $data['action_description'];
+                    $this->Closed_Time = now();
+                    $this->Closed_By = Auth::id();
+                    $this->Closed_Level = Auth::user()->Level ?? 'Level 1';
+                    if ($oldActionTaken === 'Pending Clock') {
+                        $this->Pending_Stop = now();
+                    }
+                    break;
+
+                case 'Note':
+                    // Tidak perlu ubah status ticket untuk Note
+                    break;
+
+                default:
+                    throw new \Exception('Action Taken tidak valid: ' . $newActionTaken);
+            }
+
+            // Simpan perubahan status ticket
+            $this->save();
+        }
+
+        Log::info("Action updated for ticket: {$this->No_Ticket}, Action ID: {$actionId}", [
+            'Action_Taken' => $newActionTaken,
+            'Action_Description' => $data['action_description'],
+        ]);
+
+        return $action;
     }
 
     // Helpers

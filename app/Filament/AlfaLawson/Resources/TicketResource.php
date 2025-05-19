@@ -21,14 +21,16 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class TicketResource extends Resource
 {
     protected static ?string $model = Ticket::class;
     protected static ?string $navigationIcon = 'heroicon-o-ticket';
     protected static ?string $navigationLabel = 'Ticket';
+    protected static ?string $navigationGroup = 'Support';
     protected static ?string $modelLabel = 'Tickets';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 0;
 
     public static function form(Form $form): Form
     {
@@ -280,13 +282,14 @@ class TicketResource extends Resource
                     ->rows(2),
             ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
 
-                                        // Closing Information
-                                        Group::make([
+            // Closing Information
+            Group::make([
                 Forms\Components\Textarea::make('Action_Summry')
                     ->label('Action Summary')
                     ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
                     ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                    ->rows(3),
+                    ->rows(3)
+                    ->disabled(fn ($record) => $record?->Status !== 'CLOSED'),
 
                 Forms\Components\DateTimePicker::make('Closed_Time')
                     ->label('Closed At')
@@ -294,7 +297,7 @@ class TicketResource extends Resource
                     ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
             ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
         ]),
-                                ]),
+    ]),
 
                                 Tabs\Tab::make('Closed')
                                     ->icon('heroicon-o-check-circle')
@@ -328,96 +331,141 @@ class TicketResource extends Resource
     }
 
     public static function table(Table $table): Table
-    {
-        return $table
-            ->columns([
-                TextColumn::make('No_Ticket')
-                    ->searchable()
-                    ->sortable()
-                    ->copyable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+{
+    return $table
+        ->columns([
+            TextColumn::make('No_Ticket')
+                ->searchable()
+                ->sortable()
+                ->copyable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Customer')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Customer')
+                ->searchable()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Site_ID')
-                    ->label('Remote')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Site_ID')
+                ->label('Remote')
+                ->searchable()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Problem')
-                    ->label('Problem Description')
-                    ->searchable()
-                    ->wrap()
-                    ->limit(30)
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Problem')
+                ->label('Problem Description')
+                ->searchable()
+                ->wrap()
+                ->limit(30)
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Reported_By')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Reported_By')
+                ->searchable()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'OPEN' => 'warning',
-                        'PENDING' => 'info',
-                        'CLOSED' => 'success',
-                        default => 'secondary',
-                    })
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Status')
+                ->badge()
+                ->color(fn (string $state): string => match ($state) {
+                    'OPEN' => 'warning',
+                    'PENDING' => 'info',
+                    'CLOSED' => 'success',
+                    default => 'secondary',
+                })
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Open_Time')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('Open_Time')
+                ->dateTime()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('openedBy.name')
-                    ->label('Opened By')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+            TextColumn::make('openedBy.name')
+                ->label('Opened By')
+                ->searchable()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: false),
 
-                TextColumn::make('Created_By')
-                    ->getStateUsing(fn ($record) => optional($record->openedBy)->name)
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-            ])
-            ->defaultSort('created_at', 'desc')
-            ->filters([
-                Filter::make('created_today')
-                    ->label('Created Today')
-                    ->query(fn (Builder $query): Builder => $query->whereDate('created_at', Carbon::today())),
+            TextColumn::make('Created_By')
+                ->getStateUsing(fn ($record) => optional($record->openedBy)->name)
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: false),
+        ])
+        ->defaultSort('created_at', 'desc')
+        ->filters([
+            Filter::make('created_today')
+                ->label('Created Today')
+                ->query(fn (Builder $query): Builder => $query->whereDate('created_at', Carbon::today())),
 
-                SelectFilter::make('Status')
-                    ->options([
-                        'OPEN' => 'OPEN',
-                        'PENDING' => 'PENDING',
-                        'CLOSED' => 'CLOSED',
-                    ])
-                    ->multiple(),
+            SelectFilter::make('Status')
+                ->options([
+                    'OPEN' => 'OPEN',
+                    'PENDING' => 'PENDING',
+                    'CLOSED' => 'CLOSED',
+                ])
+                ->multiple(),
 
-                SelectFilter::make('Catagory')
-                    ->options([
-                        'Internal' => 'Internal',
-                        'Komplain' => 'Komplain',
-                    ])
-                    ->multiple(),
-            ])
-            ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\DeleteAction::make(),
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
-    }
+            SelectFilter::make('Catagory')
+                ->options([
+                    'Internal' => 'Internal',
+                    'Komplain' => 'Komplain',
+                ])
+                ->multiple(),
+        ])
+        ->actions([
+            Tables\Actions\ViewAction::make(),
+            Tables\Actions\EditAction::make(),
+            // Tables\Actions\Action::make('closeTicket')
+            //     ->label('Close')
+            //     ->visible(fn ($record) => $record->Status !== 'CLOSED')
+            //     ->action(function ($record) {
+            //         $record->update([
+            //             'Status' => 'CLOSED',
+            //             'Closed_Time' => now(),
+            //             'Closed_By' => Auth::id(),
+            //         ]);
+
+            //         // Optionally prompt for Action Summary if not provided
+            //         if (empty($record->Action_Summry)) {
+            //             $record->update([
+            //                 'Action_Summry' => 'Ticket closed without summary.',
+            //             ]);
+            //         }
+            //     })
+            //     ->modalHeading('Close Ticket')
+            //     ->modalSubmitActionLabel('Confirm Close')
+            //     ->modalContent(function ($record) {
+            //         return view('filament.resources.ticket-resource.actions.close-ticket', ['record' => $record]);
+            //     })
+            //     ->modalWidth('lg'),
+            Tables\Actions\Action::make('closeTicket')
+                ->label('CLOSED')
+                ->icon('heroicon-o-check-circle')
+                ->color('success')
+                ->visible(fn ($record) => $record->Status !== 'CLOSED')
+                ->form([
+                    Forms\Components\Textarea::make('action_summary')
+                        ->label('Action Summary')
+                        ->required()
+                        ->rows(3)
+                        ->helperText('Provide a summary of the actions taken.'),
+                ])
+                ->action(function ($record, array $data) {
+                    $record->update([
+                        'Status' => 'CLOSED',
+                        'Action_Summry' => $data['action_summary'], // Set the Action_Summry from the form
+                        'Closed_Time' => now(),
+                        'Closed_By' => Auth::id(),
+                    ]);
+                })
+                ->modalHeading('Close Ticket')
+                ->modalSubmitActionLabel('Confirm Close')
+                ->modalWidth('lg'),
+        ])
+        ->bulkActions([
+            Tables\Actions\BulkActionGroup::make([
+                Tables\Actions\DeleteBulkAction::make(),
+            ]),
+        ]);
+}
 
     public static function getRelations(): array
     {

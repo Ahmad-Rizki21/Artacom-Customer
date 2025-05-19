@@ -75,6 +75,7 @@ class AlfaPanelProvider extends PanelProvider
             // ]) 
             ->navigationGroups([
                 'Panel Switcher',
+                'Support',
                 'Network Management'
             ])
             ->navigationItems([

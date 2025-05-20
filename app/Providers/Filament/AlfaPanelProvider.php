@@ -58,25 +58,7 @@ class AlfaPanelProvider extends PanelProvider
 
             
            
-            // ->navigationItems([
-            //     NavigationItem::make()
-            //         ->label('Panel Switcher')
-            //         ->icon('heroicon-o-squares-2x2')
-            //         ->url('/alfa')
-            //         ->sort(-1)
-            //         ->group('Panel Switcher')
-            //         ->childItems([
-            //             NavigationItem::make()
-            //                 ->label('ALFA LAWSON CUSTOMER')
-            //                 ->url('/alfa')
-            //                 ->icon('heroicon-o-check-circle')
-            //                 ->isActiveWhen(fn() => request()->is('alfa*')),
-            //             NavigationItem::make()
-            //                 ->label('FTTH CUSTOMER')
-            //                 ->url('/ftth')
-            //                 ->icon('heroicon-o-arrow-right-circle'),
-            //         ]),
-            // ]) 
+           
             ->navigationGroups([
                 'Panel Switcher',
                 'Support',
@@ -106,7 +88,7 @@ class AlfaPanelProvider extends PanelProvider
                             ->isActiveWhen(fn() => request()->is('alfa*')),
                         NavigationItem::make()
                             ->label('FTTH CUSTOMER')
-                            ->url('/ftth')
+                            ->url('/192.168.200.120:8001')
                             ->icon('heroicon-o-arrow-right-circle'),
                     ]),
             ])

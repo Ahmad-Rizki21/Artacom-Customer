@@ -24,73 +24,73 @@ class ViewTicket extends ViewRecord
     protected static string $resource = TicketResource::class;
 
     protected function getHeaderActions(): array
-{
-    return [
-        Actions\EditAction::make()
-            ->url(fn () => $this->getResource()::getUrl('edit', ['record' => $this->record])),
-        Actions\DeleteAction::make()
-            ->requiresConfirmation() // Add confirmation prompt
-            ->modalHeading('Delete Ticket')
-            ->modalDescription('Apakah anda yakin ingin menghapus tiket ini?')
-            ->modalSubmitActionLabel('Yes, Delete')
-            ->successNotification(
-                Notification::make()
-                    ->title('Ticket Deleted')
-                    ->body('The ticket has been successfully deleted.')
-                    ->success()
-            ),
-        Actions\Action::make('addAction')
-            ->label('Add Action')
-            ->icon('heroicon-o-plus-circle')
-            ->form([
-                Select::make('new_action_status')
-                    ->label('Action Status')
-                    ->options([
-                        'Start Clock' => 'Start Clock',
-                        'Pending Clock' => 'Pending Clock',
-                        'Closed' => 'Closed',
-                        'Note' => 'Note',
-                    ])
-                    ->required(),
-                Textarea::make('new_action_description')
-                    ->label('Description')
-                    ->required()
-            ])
-            ->action(function (array $data) {
-                $ticket = $this->record;
-                try {
-                    TicketAction::create([
-                        'No_Ticket' => $ticket->No_Ticket,
-                        'Action_Taken' => $data['new_action_status'],
-                        'Action_Time' => now(),
-                        'Action_By' => Auth::user()->name,
-                        'Action_Level' => Auth::user()->Level ?? 'Level 1',
-                        'Action_Description' => $data['new_action_description'],
-                    ]);
+    {
+        return [
+            Actions\EditAction::make()
+                ->url(fn () => $this->getResource()::getUrl('edit', ['record' => $this->record])),
+            Actions\DeleteAction::make()
+                ->requiresConfirmation()
+                ->modalHeading('Delete Ticket')
+                ->modalDescription('Apakah anda yakin ingin menghapus tiket ini?')
+                ->modalSubmitActionLabel('Yes, Delete')
+                ->successNotification(
+                    Notification::make()
+                        ->title('Ticket Deleted')
+                        ->body('The ticket has been successfully deleted.')
+                        ->success()
+                ),
+            Actions\Action::make('addAction')
+                ->label('Add Action')
+                ->icon('heroicon-o-plus-circle')
+                ->form([
+                    Select::make('new_action_status')
+                        ->label('Action Status')
+                        ->options([
+                            'Start Clock' => 'Start Clock',
+                            'Pending Clock' => 'Pending Clock',
+                            'Closed' => 'Closed',
+                            'Note' => 'Note',
+                        ])
+                        ->required(),
+                    Textarea::make('new_action_description')
+                        ->label('Description')
+                        ->required()
+                ])
+                ->action(function (array $data) {
+                    $ticket = $this->record;
+                    try {
+                        TicketAction::create([
+                            'No_Ticket' => $ticket->No_Ticket,
+                            'Action_Taken' => $data['new_action_status'],
+                            'Action_Time' => now(),
+                            'Action_By' => Auth::user()->name,
+                            'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                            'Action_Description' => $data['new_action_description'],
+                        ]);
 
-                    if ($data['new_action_status'] !== 'Note') {
-                        if ($data['new_action_status'] === 'Pending Clock') {
-                            $ticket->update(['Status' => 'PENDING', 'Pending_Start' => now(), 'Pending_Reason' => $data['new_action_description']]);
-                        } elseif ($data['new_action_status'] === 'Start Clock') {
-                            $ticket->update(['Status' => 'OPEN', 'Pending_End' => now()]);
-                        } elseif ($data['new_action_status'] === 'Closed') {
-                            $ticket->update(['Status' => 'CLOSED', 'Closed_Time' => now(), 'Action_Summry' => $data['new_action_description']]);
+                        if ($data['new_action_status'] !== 'Note') {
+                            if ($data['new_action_status'] === 'Pending Clock') {
+                                $ticket->update(['Status' => 'PENDING', 'Pending_Start' => now(), 'Pending_Reason' => $data['new_action_description']]);
+                            } elseif ($data['new_action_status'] === 'Start Clock') {
+                                $ticket->update(['Status' => 'OPEN', 'Pending_Stop' => now()]);
+                            } elseif ($data['new_action_status'] === 'Closed') {
+                                $ticket->update(['Status' => 'CLOSED', 'Closed_Time' => now(), 'Action_Summry' => $data['new_action_description']]);
+                            }
                         }
+
+                        Notification::make()->success()->title('Action added successfully')->send();
+                    } catch (\Exception $e) {
+                        Notification::make()->danger()->title('Error adding action')->body($e->getMessage())->send();
+                        throw new Halt();
                     }
+                }),
+        ];
+    }
 
-                    Notification::make()->success()->title('Action added successfully')->send();
-                } catch (\Exception $e) {
-                    Notification::make()->danger()->title('Error adding action')->body($e->getMessage())->send();
-                    throw new Halt();
-                }
-            })
-    ];
-}
-
-protected function getRedirectUrl(): string
-{
-    return $this->getResource()::getUrl('index'); // Already the default behavior
-}
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 
     public function infolist(Infolist $infolist): Infolist
     {
@@ -107,11 +107,31 @@ protected function getRedirectUrl(): string
                                             ->label('No Ticket'),
                                         TextEntry::make('Customer'),
                                         TextEntry::make('Site_ID')
-                                        ->label('Remote')
-                                        ->getStateUsing(function ($record) {
-                                            $remote = $record->remote; // Assuming 'remote' is the relationship method
-                                            return $remote ? "{$remote->Site_ID} - {$remote->Nama_Toko} - {$remote->IP_Address}" : $record->Site_ID;
-                                        }),
+                                            ->label('Site ID')
+                                            ->getStateUsing(function ($record) {
+                                                return $record->remote?->Site_ID ?? $record->Site_ID ?? '-';
+                                            }),
+                                        TextEntry::make('Nama_Toko')
+                                            ->label('Alamat')
+                                            ->getStateUsing(function ($record) {
+                                                return $record->remote?->Nama_Toko ?? '-';
+                                            }),
+                                        TextEntry::make('DC')
+                                            ->label('DC')
+                                                ->getStateUsing(function ($record) {
+                                                    return $record->remote?->DC ?? '-';
+                                            }),
+                                        TextEntry::make('IP_Address')
+                                            ->label('IP Address')
+                                            ->getStateUsing(function ($record) {
+                                                $ip = $record->remote?->IP_Address ?? '-';
+                                                return $ip !== '-' ? $ip : $ip;
+                                            })
+                                            ->url(function ($record) {
+                                                $ip = $record->remote?->IP_Address ?? '';
+                                                return $ip ? "http://{$ip}:8090" : null;
+                                            })
+                                            ->openUrlInNewTab(),
                                         TextEntry::make('Status')
                                             ->badge()
                                             ->color(fn (string $state): string => match ($state) {
@@ -120,8 +140,10 @@ protected function getRedirectUrl(): string
                                                 'CLOSED' => 'success',
                                                 default => 'secondary',
                                             }),
-                                        TextEntry::make('Open_Level'),
-                                        TextEntry::make('Catagory'),
+                                        TextEntry::make('Open_Level')
+                                            ->label('Open Level'),
+                                        TextEntry::make('Catagory')
+                                            ->label('Category'),
                                     ])
                                     ->columns(3),
 
@@ -129,9 +151,12 @@ protected function getRedirectUrl(): string
                                     ->schema([
                                         TextEntry::make('Problem')
                                             ->columnSpanFull(),
-                                        TextEntry::make('Reported_By'),
-                                        TextEntry::make('pic'),
-                                        TextEntry::make('tlp_pic'),
+                                        TextEntry::make('Reported_By')
+                                            ->label('Reported By'),
+                                        TextEntry::make('pic')
+                                            ->label('PIC'),
+                                        TextEntry::make('tlp_pic')
+                                            ->label('PIC Phone'),
                                     ])
                                     ->columns(2),
 
@@ -139,7 +164,7 @@ protected function getRedirectUrl(): string
                                     ->schema([
                                         ViewEntry::make('progress_timeline')
                                             ->view('filament.resources.ticket-progress-timeline')
-                                            ->viewData(['record' => $this->record, 'livewire' => $this])
+                                            ->viewData(['record' => $this->record, 'livewire' => $this]),
                                     ]),
                             ]),
 
@@ -148,7 +173,7 @@ protected function getRedirectUrl(): string
                             ->schema([
                                 ViewEntry::make('timer')
                                     ->view('components.ticket-timer')
-                                    ->viewData(['record' => $this->record])
+                                    ->viewData(['record' => $this->record]),
                             ]),
                     ]),
             ]);

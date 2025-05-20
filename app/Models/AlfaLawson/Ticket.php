@@ -89,55 +89,89 @@ class Ticket extends Model
             Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
         });
 
+        // static::updating(function ($model) {
+        //         if ($model->isDirty('Status')) {
+        //             $oldStatus = $model->getOriginal('Status');
+        //             $newStatus = $model->Status;
+
+        //             switch ($newStatus) {
+        //                 case static::STATUS_PENDING:
+        //                     $model->Pending_Start = now();
+        //                     $model->Pending_Stop = null;
+        //                     if (empty(trim($model->Pending_Reason))) {
+        //                         throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
+        //                     }
+        //                     break;
+
+        //                 case static::STATUS_CLOSED:
+        //                     if (empty(trim($model->Action_Summry))) {
+        //                         throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
+        //                     }
+        //                     // Remove the length check (strlen < 10)
+        //                     $model->Closed_Time = now();
+        //                     $model->Closed_By = Auth::id();
+        //                     if ($oldStatus === static::STATUS_PENDING) {
+        //                         $model->Pending_Stop = now();
+        //                     }
+        //                     break;
+
+        //                 case static::STATUS_OPEN:
+        //                     if ($oldStatus === static::STATUS_PENDING) {
+        //                         $model->Pending_Stop = now();
+        //                     }
+        //                     break;
+        //             }
+        //         }
+        //     });
         static::updating(function ($model) {
-                if ($model->isDirty('Status')) {
-                    $oldStatus = $model->getOriginal('Status');
-                    $newStatus = $model->Status;
+            if ($model->isDirty('Status')) {
+                $oldStatus = $model->getOriginal('Status');
+                $newStatus = $model->Status;
 
-                    switch ($newStatus) {
-                        case static::STATUS_PENDING:
-                            $model->Pending_Start = now();
-                            $model->Pending_Stop = null;
-                            if (empty(trim($model->Pending_Reason))) {
-                                throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
-                            }
-                            break;
+                switch ($newStatus) {
+                    case static::STATUS_PENDING:
+                        $model->Pending_Start = now();
+                        $model->Pending_Stop = null;
+                        if (empty(trim($model->Pending_Reason))) {
+                            throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
+                        }
+                        break;
 
-                        case static::STATUS_CLOSED:
-                            if (empty(trim($model->Action_Summry))) {
-                                throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
-                            }
-                            // Remove the length check (strlen < 10)
-                            $model->Closed_Time = now();
-                            $model->Closed_By = Auth::id();
-                            if ($oldStatus === static::STATUS_PENDING) {
-                                $model->Pending_Stop = now();
-                            }
-                            break;
+                    case static::STATUS_CLOSED:
+                        if (empty(trim($model->Action_Summry))) {
+                            throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
+                        }
+                        $model->Closed_Time = now();
+                        $model->Closed_By = Auth::id();
+                        if ($oldStatus === static::STATUS_PENDING) {
+                            $model->Pending_Stop = now();
+                        }
+                        break;
 
-                        case static::STATUS_OPEN:
-                            if ($oldStatus === static::STATUS_PENDING) {
-                                $model->Pending_Stop = now();
-                            }
-                            break;
-                    }
+                    case static::STATUS_OPEN:
+                        if ($oldStatus === static::STATUS_PENDING) {
+                            $model->Pending_Stop = now();
+                        }
+                        break;
                 }
-            });
+            }
+        });
     }
 
     // Duration calculations
-    public function getOpenDurationAttribute(): string
+   public function getOpenDurationAttribute(): string
     {
         if (!$this->Open_Time) return '00:00:00';
 
-        $endTime = match($this->Status) {
-            self::STATUS_PENDING => $this->Pending_Start ?? now(),
+        // Use Pending_Start as the end time if it exists, otherwise use Closed_Time or now()
+        $endTime = $this->Pending_Start ?? match($this->Status) {
             self::STATUS_CLOSED => $this->Closed_Time,
             default => now()
         };
 
         $seconds = $this->Open_Time->diffInSeconds($endTime);
 
+        // If the ticket was reopened after pending (OPEN status), subtract any prior pending periods
         if ($this->Status === self::STATUS_OPEN && $this->Pending_Start && $this->Pending_Stop) {
             $seconds -= $this->Pending_Start->diffInSeconds($this->Pending_Stop);
         }
@@ -165,13 +199,6 @@ class Ticket extends Model
             : now();
 
         $seconds = $this->Open_Time->diffInSeconds($endTime);
-
-        if ($this->Pending_Start) {
-            $pendingEnd = $this->Status === self::STATUS_PENDING 
-                ? now() 
-                : ($this->Pending_Stop ?: $this->Open_Time);
-            $seconds -= $this->Pending_Start->diffInSeconds($pendingEnd);
-        }
 
         return $this->formatDuration(max(0, $seconds));
     }

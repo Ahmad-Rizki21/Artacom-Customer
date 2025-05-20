@@ -2,6 +2,7 @@
 
 namespace App\Filament\AlfaLawson\Resources;
 
+use App\Filament\Exports\TicketExport; // Updated import
 use App\Filament\AlfaLawson\Resources\TicketResource\Pages;
 use App\Models\AlfaLawson\Ticket;
 use App\Models\AlfaLawson\TableRemote;
@@ -22,6 +23,7 @@ use Filament\Forms\Components\Textarea;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TicketResource extends Resource
 {
@@ -102,11 +104,11 @@ class TicketResource extends Resource
                                 ->rows(3),
 
                             Forms\Components\TextInput::make('Reported_By')
-                            ->label('Reported By')
-                            ->placeholder('Name of reporter (optional)')
-                            ->maxLength(100)
-                            ->prefixIcon('heroicon-m-user')
-                            ->default('-'),
+                                ->label('Reported By')
+                                ->placeholder('Name of reporter (optional)')
+                                ->maxLength(100)
+                                ->prefixIcon('heroicon-m-user')
+                                ->default('-'),
                             Forms\Components\TextInput::make('pic')
                                 ->label('PIC Name')
                                 ->maxLength(100)
@@ -184,7 +186,7 @@ class TicketResource extends Resource
                                                     } elseif ($state === 'CLOSED') {
                                                         $set('Closed_Time', now());
                                                     } elseif ($state === 'OPEN' && $record && $record->Status === 'PENDING') {
-                                                        $set('Pending_Stop', now());
+                                                        $set('Pending_End', now());
                                                     }
                                                 })
                                                 ->disabled(fn ($record) => $record?->Status === 'CLOSED')
@@ -239,7 +241,7 @@ class TicketResource extends Resource
                                                 ->label('PIC Phone')
                                                 ->prefixIcon('heroicon-m-phone'),
 
-                                            Forms\Components\Textarea::make('Problem_Summry')
+                                            Forms\Components\Textarea::make('Problem_Summary')
                                                 ->label('Problem Description')
                                                 ->columnSpan(2)
                                                 ->rows(3),
@@ -251,53 +253,53 @@ class TicketResource extends Resource
                                     ]),
 
                                 Tabs\Tab::make('Status Updates')
-    ->icon('heroicon-o-clock')
-    ->schema([
-        Grid::make(2)->schema([
-            // Open Time Information
-            Group::make([
-                Forms\Components\DateTimePicker::make('Open_Time')
-                    ->label('Opened At')
-                    ->disabled()
-                    ->dehydrated(),
+                                    ->icon('heroicon-o-clock')
+                                    ->schema([
+                                        Grid::make(2)->schema([
+                                            // Open Time Information
+                                            Group::make([
+                                                Forms\Components\DateTimePicker::make('Open_Time')
+                                                    ->label('Opened At')
+                                                    ->disabled()
+                                                    ->dehydrated(),
 
-                Forms\Components\TextInput::make('openedBy.name')
-                    ->label('Opened By')
-                    ->formatStateUsing(fn ($record) => $record?->openedBy?->name ?? 'Unknown User')
-                    ->disabled()
-                    ->dehydrated(false),
-            ])->columns(2),
+                                                Forms\Components\TextInput::make('openedBy.name')
+                                                    ->label('Opened By')
+                                                    ->formatStateUsing(fn ($record) => $record?->openedBy?->name ?? 'Unknown User')
+                                                    ->disabled()
+                                                    ->dehydrated(false),
+                                            ])->columns(2),
 
-            // Pending Information
-            Group::make([
-                Forms\Components\DateTimePicker::make('Pending_Start')
-                    ->label('Pending Since')
-                    ->disabled()
-                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING'),
+                                            // Pending Information
+                                            Group::make([
+                                                Forms\Components\DateTimePicker::make('Pending_Start')
+                                                    ->label('Pending Since')
+                                                    ->disabled()
+                                                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING'),
 
-                Forms\Components\Textarea::make('Pending_Reason')
-                    ->label('Reason for Pending')
-                    ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                    ->rows(2),
-            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
+                                                Forms\Components\Textarea::make('Pending_Reason')
+                                                    ->label('Reason for Pending')
+                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
+                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING')
+                                                    ->rows(2),
+                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
 
-            // Closing Information
-            Group::make([
-                Forms\Components\Textarea::make('Action_Summry')
-                    ->label('Action Summary')
-                    ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                    ->rows(3)
-                    ->disabled(fn ($record) => $record?->Status !== 'CLOSED'),
+                                            // Closing Information
+                                            Group::make([
+                                                Forms\Components\Textarea::make('Action_Summry')
+                                                    ->label('Action Summary')
+                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
+                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
+                                                    ->rows(3)
+                                                    ->disabled(fn ($record) => $record?->Status !== 'CLOSED'),
 
-                Forms\Components\DateTimePicker::make('Closed_Time')
-                    ->label('Closed At')
-                    ->disabled()
-                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-            ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-        ]),
-    ]),
+                                                Forms\Components\DateTimePicker::make('Closed_Time')
+                                                    ->label('Closed At')
+                                                    ->disabled()
+                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+                                        ]),
+                                    ]),
 
                                 Tabs\Tab::make('Closed')
                                     ->icon('heroicon-o-check-circle')
@@ -413,29 +415,6 @@ class TicketResource extends Resource
         ->actions([
             Tables\Actions\ViewAction::make(),
             Tables\Actions\EditAction::make(),
-            // Tables\Actions\Action::make('closeTicket')
-            //     ->label('Close')
-            //     ->visible(fn ($record) => $record->Status !== 'CLOSED')
-            //     ->action(function ($record) {
-            //         $record->update([
-            //             'Status' => 'CLOSED',
-            //             'Closed_Time' => now(),
-            //             'Closed_By' => Auth::id(),
-            //         ]);
-
-            //         // Optionally prompt for Action Summary if not provided
-            //         if (empty($record->Action_Summry)) {
-            //             $record->update([
-            //                 'Action_Summry' => 'Ticket closed without summary.',
-            //             ]);
-            //         }
-            //     })
-            //     ->modalHeading('Close Ticket')
-            //     ->modalSubmitActionLabel('Confirm Close')
-            //     ->modalContent(function ($record) {
-            //         return view('filament.resources.ticket-resource.actions.close-ticket', ['record' => $record]);
-            //     })
-            //     ->modalWidth('lg'),
             Tables\Actions\Action::make('closeTicket')
                 ->label('CLOSED')
                 ->icon('heroicon-o-check-circle')
@@ -451,7 +430,7 @@ class TicketResource extends Resource
                 ->action(function ($record, array $data) {
                     $record->update([
                         'Status' => 'CLOSED',
-                        'Action_Summry' => $data['action_summary'], // Set the Action_Summry from the form
+                        'Action_Summry' => $data['action_summary'],
                         'Closed_Time' => now(),
                         'Closed_By' => Auth::id(),
                     ]);
@@ -459,6 +438,16 @@ class TicketResource extends Resource
                 ->modalHeading('Close Ticket')
                 ->modalSubmitActionLabel('Confirm Close')
                 ->modalWidth('lg'),
+        ])
+        ->headerActions([
+            Tables\Actions\Action::make('export')
+                ->label('Export to Excel')
+                ->icon('heroicon-o-document-arrow-down')
+                ->action(function () use ($table) {
+                    $query = $table->getQuery();
+                    $tickets = $query->get();
+                    return Excel::download(new TicketExport($tickets), 'tickets_export_' . now()->format('Ymd_His') . '.xlsx');
+                }),
         ])
         ->bulkActions([
             Tables\Actions\BulkActionGroup::make([

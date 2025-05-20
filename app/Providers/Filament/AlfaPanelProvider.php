@@ -22,6 +22,7 @@ use Filament\Navigation\NavigationGroup;
 use App\Filament\AlfaLawson\Widgets\AlfaLawsonDCMapWidget;
 use App\Filament\AlfaLawson\Widgets\MonthlyTicketChart;
 use App\Filament\AlfaLawson\Widgets\StatsAlfaLawsonRemoteOverview;
+use Filament\Facades\Filament;
 
 use App\Filament\AlfaLawson\Widgets\DCMapWidget;
 use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
@@ -36,6 +37,7 @@ class AlfaPanelProvider extends PanelProvider
             ->id('alfa')
             ->path('alfa')
             ->login()
+            ->profile()
             ->colors([
                 'danger' => Color::Rose,
                 'gray' => Color::Gray,
@@ -44,17 +46,27 @@ class AlfaPanelProvider extends PanelProvider
                 'success' => Color::Emerald,
                 'warning' => Color::Orange,
             ])
+            ->sidebarFullyCollapsibleOnDesktop()
+            ->sidebarWidth('17rem')
+            
 
-            ->brandLogo(fn () => view('components.brand-alfa-logo'))
-            ->brandName('Alfamart Lawson Customer')
+            // ->brandLogo(fn () => view('components.brand-alfa-logo'))
+
+            ->brandLogo(asset('images/Logo Light.png'))
+            ->darkModeBrandLogo(asset('images/Logo Dark.png'))
+            ->brandLogoHeight(fn () => \Illuminate\Support\Facades\Auth::check() ? '3.5rem' : '7rem')
+            ->renderHook(
+                'panels::auth.login.before-heading',
+                fn () => '<style>.filament-login-page .filament-brand { margin-bottom: 1rem; } .filament-login-page .filament-form { margin-top: 0.5rem; }</style>'
+            )
             ->favicon(asset('images/favicon-opened-svgrepo-com.svg'))
             
 
-            ->renderHook(
-                'panels::auth.login.before-heading',
-                fn
-                 () => view('components.login-branding')
-            )
+            // ->renderHook(
+            //     'panels::auth.login.before-heading',
+            //     fn
+            //      () => view('components.login-branding')
+            // )
 
             
            

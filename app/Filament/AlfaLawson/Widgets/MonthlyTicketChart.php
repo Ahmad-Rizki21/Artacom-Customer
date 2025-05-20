@@ -3,6 +3,8 @@
 namespace App\Filament\AlfaLawson\Widgets;
 
 use Leandrocfe\FilamentApexCharts\Widgets\ApexChartWidget;
+use App\Models\AlfaLawson\Ticket;
+use Carbon\Carbon;
 
 class MonthlyTicketChart extends ApexChartWidget
 {
@@ -19,6 +21,17 @@ class MonthlyTicketChart extends ApexChartWidget
     {
         // Ambil data ticket bulanan untuk 12 bulan terakhir
         $monthlyData = $this->getMonthlyTicketData();
+
+        // Tentukan nilai maksimum untuk y-axis secara dinamis
+        $maxValue = max(
+            max($monthlyData['total']),
+            max($monthlyData['open_alfa']),
+            max($monthlyData['open_lawson']),
+            max($monthlyData['pending']),
+            max($monthlyData['closed'])
+        );
+        // Tambahkan buffer 10% ke nilai maksimum agar grafik tidak terlalu rapat
+        $yAxisMax = ceil($maxValue * 1.1);
 
         return [
             'chart' => [
@@ -50,7 +63,7 @@ class MonthlyTicketChart extends ApexChartWidget
                     'name' => 'Open (Lawson)',
                     'data' => $monthlyData['open_lawson'],
                     'type' => 'line',
-                    'color' => '#FF69B4', // Pink untuk Open Bakti
+                    'color' => '#FF69B4', // Pink untuk Open Lawson
                 ],
                 [
                     'name' => 'Pending',
@@ -81,7 +94,7 @@ class MonthlyTicketChart extends ApexChartWidget
                         'fontWeight' => 600,
                     ],
                 ],
-                'max' => 50,
+                'max' => $yAxisMax, // Nilai maksimum dinamis
             ],
             'stroke' => [
                 'curve' => 'smooth',
@@ -136,7 +149,7 @@ class MonthlyTicketChart extends ApexChartWidget
     }
 
     /**
-     * Ambil data ticket bulanan untuk 12 bulan terakhir menggunakan data dummy
+     * Ambil data ticket bulanan untuk 12 bulan terakhir dari database
      *
      * @return array
      */
@@ -149,49 +162,47 @@ class MonthlyTicketChart extends ApexChartWidget
         $pendingTickets = collect();
         $closedTickets = collect();
 
-        // Data untuk 12 bulan terakhir (Juni 2024 - Mei 2025)
+        // Tentukan rentang waktu: 12 bulan terakhir (Juni 2024 - Mei 2025)
+        $startDate = now()->subMonths(11)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        // Ambil data tiket yang dibuat dalam rentang waktu tersebut
+        $tickets = Ticket::selectRaw('YEAR(Open_Time) as year, MONTH(Open_Time) as month, Customer, Status, COUNT(*) as count')
+            ->whereBetween('Open_Time', [$startDate, $endDate])
+            ->groupBy('year', 'month', 'Customer', 'Status')
+            ->get();
+
+        // Inisialisasi data untuk setiap bulan
         for ($i = 11; $i >= 0; $i--) {
             $month = now()->subMonths($i);
             $monthName = $month->format('M Y');
             $months->push($monthName);
 
-            // Data dummy sesuai dengan chart
-            if ($monthName === 'May 2025') {
-                $openAlfa = 2;
-                $openLawson = 1;
-                $pending = 5;
-                $closed = 45;
-                $total = 53; // 2 + 1 + 5 + 45
-            } elseif ($monthName === 'Apr 2025') {
-                $openAlfa = 1;
-                $openLawson = 1;
-                $pending = 4;
-                $closed = 40;
-                $total = 46;
-            } elseif ($monthName === 'Mar 2025') {
-                $openAlfa = 1;
-                $openBakti = 1;
-                $pending = 3;
-                $closed = 35;
-                $total = 40;
-            } elseif ($monthName === 'Feb 2025') {
-                $openAlfa = 1;
-                $openLawson = 1;
-                $pending = 2;
-                $closed = 30;
-                $total = 34;
-            } else {
-                $openAlfa = rand(0, 2);
-                $openLawson = rand(0, 2);
-                $pending = rand(0, 5);
-                $closed = rand(10, 30);
-                $total = $openAlfa + $openLawson + $pending + $closed;
-            }
-            $openAlfaTickets->push($openAlfa);
-            $openLawsonTickets->push($openLawson);
-            $pendingTickets->push($pending);
-            $closedTickets->push($closed);
+            $year = $month->year;
+            $monthNum = $month->month;
+
+            // Filter data untuk bulan ini
+            $monthData = $tickets->where('year', $year)->where('month', $monthNum);
+
+            // Hitung total tiket
+            $total = $monthData->sum('count');
             $totalTickets->push($total);
+
+            // Hitung tiket OPEN untuk ALFAMART
+            $openAlfa = $monthData->where('Customer', 'ALFAMART')->where('Status', Ticket::STATUS_OPEN)->sum('count');
+            $openAlfaTickets->push($openAlfa);
+
+            // Hitung tiket OPEN untuk LAWSON
+            $openLawson = $monthData->where('Customer', 'LAWSON')->where('Status', Ticket::STATUS_OPEN)->sum('count');
+            $openLawsonTickets->push($openLawson);
+
+            // Hitung tiket PENDING (semua customer)
+            $pending = $monthData->where('Status', Ticket::STATUS_PENDING)->sum('count');
+            $pendingTickets->push($pending);
+
+            // Hitung tiket CLOSED (semua customer)
+            $closed = $monthData->where('Status', Ticket::STATUS_CLOSED)->sum('count');
+            $closedTickets->push($closed);
         }
 
         return [

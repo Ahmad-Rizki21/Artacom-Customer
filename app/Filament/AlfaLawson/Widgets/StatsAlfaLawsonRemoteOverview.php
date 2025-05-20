@@ -4,16 +4,23 @@ namespace App\Filament\AlfaLawson\Widgets;
 
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use App\Models\AlfaLawson\TableRemote;
+use App\Models\AlfaLawson\Ticket;
 
 class StatsAlfaLawsonRemoteOverview extends BaseWidget
 {
     protected static ?int $sort = 0;
+
     protected function getStats(): array
     {
-        // Simulasi data (ganti dengan query ke database sesuai kebutuhan)
-        $totalRemote = 5; // Ganti dengan query seperti: Remote::count();
-        $totalTicketAlfa = 10; // Ganti dengan query seperti: Ticket::where('type', 'alfa')->count();
-        $totalTicketLawson = 15; // Ganti dengan query seperti: Ticket::where('type', 'lawson')->count();
+        // Query untuk menghitung total remote dengan status OPERATIONAL
+        $totalRemote = TableRemote::where('Status', 'OPERATIONAL')->count();
+
+        // Query untuk menghitung total tiket untuk customer ALFAMART
+        $totalTicketAlfa = Ticket::where('Customer', 'ALFAMART')->count();
+
+        // Query untuk menghitung total tiket untuk customer LAWSON
+        $totalTicketLawson = Ticket::where('Customer', 'LAWSON')->count();
 
         return [
             Stat::make('Total Remote Alfamart Lawson', $totalRemote)
@@ -30,6 +37,7 @@ class StatsAlfaLawsonRemoteOverview extends BaseWidget
                 ->color('success'),
         ];
     }
+
     protected function getView(): string
     {
         return 'filament.widgets.stats-overview';

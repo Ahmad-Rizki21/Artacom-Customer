@@ -148,7 +148,7 @@ class TableRemoteResource extends Resource
                     ->copyable()
                     ->tooltip('Click to copy Site ID')
                     ->weight(FontWeight::Bold)
-                    ->icon('heroicon-o-building-library')
+                    // ->icon('heroicon-o-building-library')
                     ->toggleable(),
             
                 TextColumn::make('Nama_Toko')
@@ -238,11 +238,32 @@ class TableRemoteResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('DC')
                     ->label('Distribution Center')
-                    ->options([
-                        'BEKASI' => 'Bekasi',
-                        'MARUNDA' => 'Marunda',
-                        'SENTUL' => 'Sentul',
-                    ]),
+                    ->options(function () {
+                        return TableRemote::distinct()
+                            ->pluck('DC', 'DC')
+                            ->filter() // Remove null values
+                            ->mapWithKeys(function ($dc) {
+                                return [$dc => ucfirst(strtolower($dc))];
+                            })
+                            ->toArray();
+                    })
+                    ->multiple()
+                    ->searchable(),
+
+                Tables\Filters\SelectFilter::make('Customer')
+                    ->label('Customer')
+                    ->options(function () {
+                        return TableRemote::distinct()
+                            ->pluck('Customer', 'Customer')
+                            ->filter() // Remove null values
+                            ->mapWithKeys(function ($customer) {
+                                return [$customer => ucfirst(strtolower($customer))];
+                            })
+                            ->toArray();
+                    })
+                    ->multiple()
+                    ->searchable(),
+
 
                 Tables\Filters\SelectFilter::make('Link')
                     ->label('Connection Type')

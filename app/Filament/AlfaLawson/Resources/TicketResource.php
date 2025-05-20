@@ -2,7 +2,7 @@
 
 namespace App\Filament\AlfaLawson\Resources;
 
-use App\Filament\Exports\TicketExport; // Updated import
+use App\Filament\Exports\TicketExport;
 use App\Filament\AlfaLawson\Resources\TicketResource\Pages;
 use App\Models\AlfaLawson\Ticket;
 use App\Models\AlfaLawson\TableRemote;
@@ -333,128 +333,172 @@ class TicketResource extends Resource
     }
 
     public static function table(Table $table): Table
-{
-    return $table
-        ->columns([
-            TextColumn::make('No_Ticket')
-                ->searchable()
-                ->sortable()
-                ->copyable()
-                ->toggleable(isToggledHiddenByDefault: false),
+    {
+        return $table
+            ->columns([
+                TextColumn::make('No_Ticket')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Customer')
-                ->searchable()
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Customer')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Site_ID')
-                ->label('Remote')
-                ->searchable()
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Site_ID')
+                    ->label('Remote')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Problem')
-                ->label('Problem Description')
-                ->searchable()
-                ->wrap()
-                ->limit(30)
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Problem')
+                    ->label('Problem Description')
+                    ->searchable()
+                    ->wrap()
+                    ->limit(30)
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Reported_By')
-                ->searchable()
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Reported_By')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Status')
-                ->badge()
-                ->color(fn (string $state): string => match ($state) {
-                    'OPEN' => 'warning',
-                    'PENDING' => 'info',
-                    'CLOSED' => 'success',
-                    default => 'secondary',
-                })
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'OPEN' => 'warning',
+                        'PENDING' => 'info',
+                        'CLOSED' => 'success',
+                        default => 'secondary',
+                    })
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Open_Time')
-                ->dateTime()
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: false),
+                TextColumn::make('Open_Time')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('openedBy.name')
-                ->label('Opened By')
-                ->searchable()
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: false),
+                // Add Closed_Time column to make closed ticket info more visible
+                TextColumn::make('Closed_Time')
+                    ->label('Closed At')
+                    ->dateTime()
+                    ->sortable()
+                    ->placeholder('Not Closed')
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            TextColumn::make('Created_By')
-                ->getStateUsing(fn ($record) => optional($record->openedBy)->name)
-                ->searchable()
-                ->toggleable(isToggledHiddenByDefault: false),
-        ])
-        ->defaultSort('created_at', 'desc')
-        ->filters([
-            Filter::make('created_today')
-                ->label('Created Today')
-                ->query(fn (Builder $query): Builder => $query->whereDate('created_at', Carbon::today())),
+                TextColumn::make('openedBy.name')
+                    ->label('Opened By')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
-            SelectFilter::make('Status')
-                ->options([
-                    'OPEN' => 'OPEN',
-                    'PENDING' => 'PENDING',
-                    'CLOSED' => 'CLOSED',
-                ])
-                ->multiple(),
+                TextColumn::make('Created_By')
+                    ->getStateUsing(fn ($record) => optional($record->openedBy)->name)
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: false),
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->filters([
+                SelectFilter::make('Status')
+                    ->options([
+                        'OPEN' => 'OPEN',
+                        'PENDING' => 'PENDING',
+                        'CLOSED' => 'CLOSED',
+                    ])
+                    ->multiple(),
 
-            SelectFilter::make('Catagory')
-                ->options([
-                    'Internal' => 'Internal',
-                    'Komplain' => 'Komplain',
-                ])
-                ->multiple(),
-        ])
-        ->actions([
-            Tables\Actions\ViewAction::make(),
-            Tables\Actions\EditAction::make(),
-            Tables\Actions\Action::make('closeTicket')
-                ->label('CLOSED')
-                ->icon('heroicon-o-check-circle')
-                ->color('success')
-                ->visible(fn ($record) => $record->Status !== 'CLOSED')
-                ->form([
-                    Forms\Components\Textarea::make('action_summary')
-                        ->label('Action Summary')
-                        ->required()
-                        ->rows(3)
-                        ->helperText('Provide a summary of the actions taken.'),
-                ])
-                ->action(function ($record, array $data) {
-                    $record->update([
-                        'Status' => 'CLOSED',
-                        'Action_Summry' => $data['action_summary'],
-                        'Closed_Time' => now(),
-                        'Closed_By' => Auth::id(),
-                    ]);
-                })
-                ->modalHeading('Close Ticket')
-                ->modalSubmitActionLabel('Confirm Close')
-                ->modalWidth('lg'),
-        ])
-        ->headerActions([
-            Tables\Actions\Action::make('export')
-                ->label('Export to Excel')
-                ->icon('heroicon-o-document-arrow-down')
-                ->action(function () use ($table) {
-                    $query = $table->getQuery();
-                    $tickets = $query->get();
-                    return Excel::download(new TicketExport($tickets), 'tickets_export_' . now()->format('Ymd_His') . '.xlsx');
-                }),
-        ])
-        ->bulkActions([
-            Tables\Actions\BulkActionGroup::make([
-                Tables\Actions\DeleteBulkAction::make(),
-            ]),
-        ]);
-}
+                // Add Date Range Filter (Dari Tanggal & Sampai Tanggal)
+                Filter::make('periode')
+                    ->form([
+                        Grid::make(2)
+                            ->schema([
+                                Forms\Components\DatePicker::make('start_date')
+                                    ->label('Dari Tanggal')
+                                    ->displayFormat('d M Y')
+                                    ->native(false)
+                                    ->closeOnDateSelection()
+                                    ->maxDate(now())
+                                    ->placeholder('Pilih Tanggal'),
+                                    
+                                Forms\Components\DatePicker::make('end_date')
+                                    ->label('Sampai Tanggal')
+                                    ->displayFormat('d M Y')
+                                    ->native(false)
+                                    ->closeOnDateSelection()
+                                    ->maxDate(now())
+                                    ->placeholder('Pilih Tanggal'),
+                            ])
+                            ->columns(2),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['start_date'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
+                            )
+                            ->when(
+                                $data['end_date'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['start_date'] ?? null) {
+                            $indicators[] = 'Dari: ' . Carbon::parse($data['start_date'])->format('d M Y');
+                        }
+                        if ($data['end_date'] ?? null) {
+                            $indicators[] = 'Sampai: ' . Carbon::parse($data['end_date'])->format('d M Y');
+                        }
+                        return $indicators;
+                    }),
+
+                // Add Problem Type Filter
+                
+                SelectFilter::make('Catagory')
+                    ->options([
+                        'Internal' => 'Internal',
+                        'Komplain' => 'Komplain',
+                    ])
+                    ->multiple(),
+            ])
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+            ->filtersFormColumns(3)
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('closeTicket')
+                    ->label('CLOSED')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn ($record) => $record->Status !== 'CLOSED')
+                    ->form([
+                        Forms\Components\Textarea::make('action_summary')
+                            ->label('Action Summary')
+                            ->required()
+                            ->rows(3)
+                            ->helperText('Provide a summary of the actions taken.'),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->update([
+                            'Status' => 'CLOSED',
+                            'Action_Summry' => $data['action_summary'],
+                            'Closed_Time' => now(),
+                            'Closed_By' => Auth::id(),
+                        ]);
+                    })
+                    ->modalHeading('Close Ticket')
+                    ->modalSubmitActionLabel('Confirm Close')
+                    ->modalWidth('lg'),
+            ])
+        
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
 
     public static function getRelations(): array
     {
@@ -471,8 +515,18 @@ class TicketResource extends Resource
         ];
     }
 
-    public static function getNavigationBadge(): ?string
+
+    public static function getNavigationBadgeColor(): ?string
     {
-        return static::getModel()::where('Status', 'OPEN')->count();
+        $openCount = static::getModel()::where('Status', 'OPEN')->count();
+        $pendingCount = static::getModel()::where('Status', 'PENDING')->count();
+
+        if ($openCount > 0) {
+            return 'danger';
+        }
+        if ($pendingCount > 0) {
+            return 'warning';
+        }
+        return 'success';
     }
 }

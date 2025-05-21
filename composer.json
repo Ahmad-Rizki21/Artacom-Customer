@@ -30,9 +30,12 @@
         "nuxtifyts/dash-stack-theme": "^1.2",
         "openspout/openspout": "^4.28",
         "phpoffice/phpspreadsheet": "^1.29",
+        "pxlrbt/filament-activity-log": "^1.1",
         "pxlrbt/filament-excel": "^2.4",
+        "rmsramos/activitylog": "^1.0",
         "swisnl/filament-backgrounds": "^1.1",
-        "webbingbrasil/filament-maps": "^3.0"
+        "webbingbrasil/filament-maps": "^3.0",
+        "z3d0x/filament-logger": "^0.8.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

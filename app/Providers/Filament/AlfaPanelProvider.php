@@ -27,6 +27,7 @@ use Filament\Facades\Filament;
 use App\Filament\AlfaLawson\Widgets\DCMapWidget;
 use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
+use Rmsramos\Activitylog\ActivitylogPlugin;
 
 class AlfaPanelProvider extends PanelProvider
 {
@@ -68,6 +69,10 @@ class AlfaPanelProvider extends PanelProvider
             //      () => view('components.login-branding')
             // )
 
+            ->resources([
+            config('filament-logger.activity_resource')
+            ])
+
             
            
            
@@ -99,9 +104,9 @@ class AlfaPanelProvider extends PanelProvider
                             ->icon('heroicon-o-check-circle')
                             ->isActiveWhen(fn() => request()->is('alfa*')),
                         NavigationItem::make()
-                            ->label('FTTH CUSTOMER')
-                            ->url('/192.168.200.120:8001')
-                            ->icon('heroicon-o-arrow-right-circle'),
+                        ->label('FTTH CUSTOMER')
+                        ->url('http://192.168.200.120:8001')
+                        ->icon('heroicon-o-arrow-right-circle'),
                     ]),
             ])
 
@@ -143,6 +148,7 @@ class AlfaPanelProvider extends PanelProvider
                 '
             )
             ->plugins([
+                
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
                 FilamentBackgroundsPlugin::make()
                 ->showAttribution(false),

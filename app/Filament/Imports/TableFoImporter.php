@@ -22,7 +22,8 @@ class TableFoImporter extends Importer
 
             ImportColumn::make('Provider')
                 ->label('Provider Name')
-                ->rules(['required', 'string']),
+                ->rules(['required', 'string', 'max:255']),
+
 
             ImportColumn::make('Register_Name')
                 ->label('Register Name')
@@ -43,11 +44,11 @@ class TableFoImporter extends Importer
         Log::info('Importing FO record:', $this->data);
 
         try {
-            $record = TableFo::firstOrNew([
-                'CID' => $this->data['CID'],
-            ]);
+            // Buat record baru setiap kali, tanpa memeriksa duplikat CID
+            $record = new TableFo();
 
             $record->fill([
+                'CID' => $this->data['CID'],
                 'Provider' => $this->data['Provider'],
                 'Register_Name' => $this->data['Register_Name'] ?? null,
                 'Site_ID' => $this->data['Site_ID'],

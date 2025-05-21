@@ -139,8 +139,14 @@ class TableFoResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table        
-            ->description('Daftar semua Remote FO dengan status OPERATIONAL.')
+        return $table
+        ->description('Daftar semua Remote FO dengan status OPERATIONAL.')
+        ->query(function () {
+            return parent::getModel()::query()
+                ->whereHas('remote', function ($query) {
+                    $query->where('Link', 'FO-GSM');
+                });
+        })
             ->columns([
                 Tables\Columns\TextColumn::make('CID')
                     ->label('Connection ID')
@@ -177,29 +183,38 @@ class TableFoResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                Tables\Filters\SelectFilter::make('Status')
-                    ->options([
-                        'Active' => 'Active',
-                        'Dismantle' => 'Dismantle',
-                        'Suspend' => 'Suspend',
-                        'Not Active' => 'Not Active',
-                    ])
-                    ->indicator('Status'),
+            Tables\Filters\SelectFilter::make('Status')
+                ->options([
+                    'Active' => 'Active',
+                    'Dismantle' => 'Dismantle',
+                    'Suspend' => 'Suspend',
+                    'Not Active' => 'Not Active',
+                ])
+                ->indicator('Status'),
 
-                Tables\Filters\SelectFilter::make('Provider')
-                    ->options([
-                        'ICON+' => 'ICON+',
-                        'Telkom' => 'Telkom',
-                        'Lintasarta' => 'Lintasarta',
-                        'XL' => 'XL',
-                        'Indosat' => 'Indosat',
-                    ])
-                    ->indicator('Provider'),
+            Tables\Filters\SelectFilter::make('Provider')
+                ->options(function () {
+                    // Get all unique providers from the table_fo
+                    return TableFo::query()
+                        ->distinct()
+                        ->pluck('Provider', 'Provider')
+                        ->toArray();
+                })
+                ->searchable()
+                ->indicator('Provider'),
 
-                Tables\Filters\SelectFilter::make('DC')
-                    ->relationship('remote', 'DC')
-                    ->indicator('Distribution Center'),
-            ])
+            Tables\Filters\SelectFilter::make('DC')
+                ->options(function () {
+                    return TableRemote::query()
+                        ->where('Link', 'FO-GSM')
+                        ->distinct()
+                        ->pluck('DC', 'DC')
+                        ->toArray();
+                })
+                ->searchable()
+                ->indicator('Distribution Center'),
+        ])
+
             ->filtersFormColumns(3)
             ->headerActions([
                 Tables\Actions\ExportAction::make()

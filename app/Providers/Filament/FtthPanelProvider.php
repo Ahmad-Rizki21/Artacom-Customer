@@ -55,7 +55,7 @@ class FTTHPanelProvider extends PanelProvider
                             ->url('/alfa')
                             ->icon('heroicon-o-arrow-right-circle'),
                         NavigationItem::make()
-                            ->label('FTTH CUSTOMER')
+                            ->label('BSI CUSTOMER')
                             ->url('/ftth')
                             ->icon('heroicon-o-check-circle')
                             ->isActiveWhen(fn() => request()->is('ftth*')),

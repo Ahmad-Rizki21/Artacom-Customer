@@ -107,6 +107,10 @@ class AlfaPanelProvider extends PanelProvider
                         ->label('FTTH CUSTOMER')
                         ->url('http://192.168.200.120:8001')
                         ->icon('heroicon-o-arrow-right-circle'),
+                        //  NavigationItem::make()
+                        // ->label('BSI CUSTOMER')
+                        // ->url('/ftth')
+                        // ->icon('heroicon-o-arrow-right-circle'),
                     ]),
             ])
 

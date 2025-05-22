@@ -10,18 +10,90 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\ViewEntry;
 use App\Models\AlfaLawson\TicketAction;
-use Carbon\Carbon;
-use Filament\Actions\Action;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
-use Filament\Support\Exceptions\Halt;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Form;
+use App\Filament\Components\TicketTimer;
 
 class ViewTicket extends ViewRecord
 {
     protected static string $resource = TicketResource::class;
+
+    public function addAction(array $data): void
+    {
+        try {
+            // Validate required fields
+            if (empty($data['new_action_status']) || empty($data['new_action_description'])) {
+                throw new \Exception('Action status and description are required.');
+            }
+
+            // Create a new ticket action
+            TicketAction::create([
+                'No_Ticket' => $this->record->No_Ticket,
+                'Action_Taken' => $data['new_action_status'],
+                'Action_Time' => now(),
+                'Action_By' => Auth::user()->name,
+                'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                'Action_Description' => $data['new_action_description'],
+            ]);
+
+            // Update ticket status based on action
+            if ($data['new_action_status'] !== 'Note') {
+                $updateData = [];
+                if ($data['new_action_status'] === 'Pending Clock') {
+                    $updateData = [
+                        'Status' => 'PENDING',
+                        'Pending_Start' => now(),
+                        'Pending_Reason' => $data['new_action_description'],
+                    ];
+                } elseif ($data['new_action_status'] === 'Start Clock') {
+                    $updateData = [
+                        'Status' => 'OPEN',
+                        'Pending_Stop' => now(),
+                    ];
+                } elseif ($data['new_action_status'] === 'Closed') {
+                    $updateData = [
+                        'Status' => 'CLOSED',
+                        'Closed_Time' => now(),
+                        'Action_Summry' => $data['new_action_description'],
+                    ];
+                }
+
+                if (!empty($updateData)) {
+                    $this->record->update($updateData);
+                    // Emit events to update the UI and timer
+                    $this->dispatch('statusUpdated', $this->record->Status);
+                    $this->dispatch('refresh');
+                }
+            }
+
+            // Send success notification
+            Notification::make()
+                ->success()
+                ->title('Action Added')
+                ->body('The action was added successfully.')
+                ->send();
+
+            // Redirect ke halaman yang sama untuk refresh browser
+            $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
+        } catch (\Exception $e) {
+            // Send error notification
+            Notification::make()
+                ->danger()
+                ->title('Error Adding Action')
+                ->body($e->getMessage())
+                ->send();
+        }
+    }
+
+    protected function renderTicketTimer()
+    {
+        return TicketTimer::make()
+            ->ticket($this->record)
+            ->render();
+    }
 
     protected function getHeaderActions(): array
     {
@@ -55,35 +127,11 @@ class ViewTicket extends ViewRecord
                     Textarea::make('new_action_description')
                         ->label('Description')
                         ->required()
+                        ->rows(3),
                 ])
-                ->action(function (array $data) {
-                    $ticket = $this->record;
-                    try {
-                        TicketAction::create([
-                            'No_Ticket' => $ticket->No_Ticket,
-                            'Action_Taken' => $data['new_action_status'],
-                            'Action_Time' => now(),
-                            'Action_By' => Auth::user()->name,
-                            'Action_Level' => Auth::user()->Level ?? 'Level 1',
-                            'Action_Description' => $data['new_action_description'],
-                        ]);
-
-                        if ($data['new_action_status'] !== 'Note') {
-                            if ($data['new_action_status'] === 'Pending Clock') {
-                                $ticket->update(['Status' => 'PENDING', 'Pending_Start' => now(), 'Pending_Reason' => $data['new_action_description']]);
-                            } elseif ($data['new_action_status'] === 'Start Clock') {
-                                $ticket->update(['Status' => 'OPEN', 'Pending_Stop' => now()]);
-                            } elseif ($data['new_action_status'] === 'Closed') {
-                                $ticket->update(['Status' => 'CLOSED', 'Closed_Time' => now(), 'Action_Summry' => $data['new_action_description']]);
-                            }
-                        }
-
-                        Notification::make()->success()->title('Action added successfully')->send();
-                    } catch (\Exception $e) {
-                        Notification::make()->danger()->title('Error adding action')->body($e->getMessage())->send();
-                        throw new Halt();
-                    }
-                }),
+                ->action(fn (array $data) => $this->addAction($data))
+                ->modalSubmitActionLabel('Submit')
+                ->extraAttributes(['wire:submit.prevent' => 'addAction']),
         ];
     }
 
@@ -108,21 +156,19 @@ class ViewTicket extends ViewRecord
                                         TextEntry::make('Customer'),
                                         TextEntry::make('Site_ID')
                                             ->label('Site ID')
-                                            ->getStateUsing(function ($record) {
-                                                return $record->remote?->Site_ID ?? $record->Site_ID ?? '-';
-                                            }),
+                                            ->default('-')
+                                            ->getStateUsing(fn ($record) => $record->remote?->Site_ID ?? $record->Site_ID ?? '-'),
                                         TextEntry::make('Nama_Toko')
                                             ->label('Alamat')
-                                            ->getStateUsing(function ($record) {
-                                                return $record->remote?->Nama_Toko ?? '-';
-                                            }),
+                                            ->default('-')
+                                            ->getStateUsing(fn ($record) => $record->remote?->Nama_Toko ?? '-'),
                                         TextEntry::make('DC')
                                             ->label('DC')
-                                                ->getStateUsing(function ($record) {
-                                                    return $record->remote?->DC ?? '-';
-                                            }),
+                                            ->default('-')
+                                            ->getStateUsing(fn ($record) => $record->remote?->DC ?? '-'),
                                         TextEntry::make('IP_Address')
                                             ->label('IP Address')
+                                            ->default('-')
                                             ->getStateUsing(function ($record) {
                                                 $ip = $record->remote?->IP_Address ?? '-';
                                                 return $ip !== '-' ? $ip : $ip;
@@ -152,11 +198,14 @@ class ViewTicket extends ViewRecord
                                         TextEntry::make('Problem')
                                             ->columnSpanFull(),
                                         TextEntry::make('Reported_By')
-                                            ->label('Reported By'),
+                                            ->label('Reported By')
+                                            ->default('-'),
                                         TextEntry::make('pic')
-                                            ->label('PIC'),
+                                            ->label('PIC')
+                                            ->default('-'),
                                         TextEntry::make('tlp_pic')
-                                            ->label('PIC Phone'),
+                                            ->label('PIC Phone')
+                                            ->default('-'),
                                     ])
                                     ->columns(2),
 
@@ -172,7 +221,7 @@ class ViewTicket extends ViewRecord
                             ->columnSpan(1)
                             ->schema([
                                 ViewEntry::make('timer')
-                                    ->view('components.ticket-timer')
+                                    ->view('livewire.ticket-timer')
                                     ->viewData(['record' => $this->record]),
                             ]),
                     ]),

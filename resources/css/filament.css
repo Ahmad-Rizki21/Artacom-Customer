@@ -10,3 +10,21 @@
 .apexcharts-legend-text {
     color: #374151 !important;
 }
+
+.filament-tables-filters .fi-select {
+    background-color: #1f2937 !important;
+    color: white !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    padding: 0.5rem !important;
+}
+
+.filament-tables-filters .fi-select:focus {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2) !important;
+}
+
+.filament-tables-filters .fi-select option {
+    background-color: #1f2937 !important;
+    color: white !important;
+}

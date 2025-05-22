@@ -236,43 +236,100 @@ class TableRemoteResource extends Resource
             ])
             ->defaultSort('Site_ID', 'asc')
             ->filters([
-                Tables\Filters\SelectFilter::make('DC')
-                    ->label('Distribution Center')
-                    ->options(function () {
-                        return TableRemote::distinct()
-                            ->pluck('DC', 'DC')
-                            ->filter() // Remove null values
-                            ->mapWithKeys(function ($dc) {
-                                return [$dc => ucfirst(strtolower($dc))];
-                            })
-                            ->toArray();
-                    })
-                    ->multiple()
-                    ->searchable(),
+    // Distribution Center Filter
+    Tables\Filters\SelectFilter::make('DC')
+        ->label('Distribution Center')
+        ->options(function () {
+            return TableRemote::distinct()
+                ->pluck('DC', 'DC')
+                ->filter() // Remove null values
+                ->mapWithKeys(function ($dc) {
+                    return [$dc => ucfirst(strtolower($dc))];
+                })
+                ->toArray();
+        })
+        ->multiple()
+        ->searchable()
+        ->placeholder('Select Distribution Center')
+        ->indicateUsing(function (array $data): ?string {
+            if (!empty($data['values'])) {
+                return 'DC: ' . count($data['values']) . ' selected';
+            }
+            return null;
+        }),
 
-                Tables\Filters\SelectFilter::make('Customer')
-                    ->label('Customer')
-                    ->options(function () {
-                        return TableRemote::distinct()
-                            ->pluck('Customer', 'Customer')
-                            ->filter() // Remove null values
-                            ->mapWithKeys(function ($customer) {
-                                return [$customer => ucfirst(strtolower($customer))];
-                            })
-                            ->toArray();
-                    })
-                    ->multiple()
-                    ->searchable(),
+    // Customer Filter
+    Tables\Filters\SelectFilter::make('Customer')
+        ->label('Customer')
+        ->options(function () {
+            return TableRemote::distinct()
+                ->pluck('Customer', 'Customer')
+                ->filter() // Remove null values
+                ->mapWithKeys(function ($customer) {
+                    return [$customer => ucfirst(strtolower($customer))];
+                })
+                ->toArray();
+        })
+        ->multiple()
+        ->searchable()
+        ->placeholder('Select Customer')
+        ->indicateUsing(function (array $data): ?string {
+            if (!empty($data['values'])) {
+                return 'Customer: ' . count($data['values']) . ' selected';
+            }
+            return null;
+        }),
+
+    // Controller Filter
+    Tables\Filters\SelectFilter::make('Controller')
+        ->label('Controller')
+        ->options(function () {
+            return TableRemote::distinct()
+                ->pluck('Controller', 'Controller')
+                ->filter() // Remove null values
+                ->mapWithKeys(function ($controller) {
+                    return [$controller => ucfirst(strtolower($controller))];
+                })
+                ->toArray();
+        })
+        ->multiple()
+        ->searchable()
+        ->placeholder('Select Controller')
+        ->indicateUsing(function (array $data): ?string {
+            if (!empty($data['values'])) {
+                return 'Controller: ' . count($data['values']) . ' selected';
+            }
+            return null;
+        }),
 
 
-                Tables\Filters\SelectFilter::make('Link')
-                    ->label('Connection Type')
-                    ->options([
-                        'FO-GSM' => 'FO-GSM',
-                        'SINGLE-GSM' => 'Single-GSM',
-                        'DUAL-GSM' => 'Dual-GSM',
-                    ]),
-            ])
+    // Connection Type Filter (Mapped to Category)
+    Tables\Filters\SelectFilter::make('Link')
+        ->label('Connection Type')
+        ->options([
+            'FO-GSM' => 'FO-GSM',
+            'SINGLE-GSM' => 'Single-GSM',
+            'DUAL-GSM' => 'Dual-GSM',
+        ])
+        ->multiple()
+        ->placeholder('Select Connection Type')
+        ->indicateUsing(function (array $data): ?string {
+            if (!empty($data['values'])) {
+                return 'Connection: ' . implode(', ', $data['values']);
+            }
+            return null;
+        }),
+])
+->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+->filtersFormColumns(4)
+
+->filtersTriggerAction(
+    fn (Tables\Actions\Action $action) => $action
+        ->button()
+        ->label('Filters')
+        ->icon('heroicon-o-funnel')
+        ->color('primary')
+)
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),

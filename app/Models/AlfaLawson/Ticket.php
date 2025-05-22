@@ -159,48 +159,105 @@ class Ticket extends Model
     }
 
     // Duration calculations
-   public function getOpenDurationAttribute(): string
+public function getOpenDurationAttribute()
     {
-        if (!$this->Open_Time) return '00:00:00';
+        if (!$this->Open_Time) return 0;
 
-        // Use Pending_Start as the end time if it exists, otherwise use Closed_Time or now()
-        $endTime = $this->Pending_Start ?? match($this->Status) {
-            self::STATUS_CLOSED => $this->Closed_Time,
-            default => now()
-        };
+        $start = Carbon::parse($this->Open_Time)->timestamp;
+        $now = Carbon::now()->timestamp;
 
-        $seconds = $this->Open_Time->diffInSeconds($endTime);
+        if ($this->Status === 'CLOSED' && $this->Closed_Time) {
+            $end = Carbon::parse($this->Closed_Time)->timestamp;
+            $duration = $end - $start;
 
-        // If the ticket was reopened after pending (OPEN status), subtract any prior pending periods
-        if ($this->Status === self::STATUS_OPEN && $this->Pending_Start && $this->Pending_Stop) {
-            $seconds -= $this->Pending_Start->diffInSeconds($this->Pending_Stop);
+            if ($this->Pending_Start && $this->Pending_Stop) {
+                $pendingDuration = Carbon::parse($this->Pending_Stop)->timestamp - Carbon::parse($this->Pending_Start)->timestamp;
+                $duration -= $pendingDuration;
+            }
+            return max(0, $duration);
         }
 
-        return $this->formatDuration(max(0, $seconds));
+        if ($this->Status === 'PENDING' && $this->Pending_Start) {
+            $end = Carbon::parse($this->Pending_Start)->timestamp;
+            return max(0, $end - $start);
+        }
+
+        if ($this->Status === 'OPEN') {
+            $duration = $now - $start;
+            if ($this->Pending_Start && $this->Pending_Stop) {
+                $pendingDuration = Carbon::parse($this->Pending_Stop)->timestamp - Carbon::parse($this->Pending_Start)->timestamp;
+                $duration -= $pendingDuration;
+            }
+            return max(0, $duration);
+        }
+
+        return 0;
+    }
+public function getPendingDurationAttribute()
+    {
+        if (!$this->Pending_Start) return 0;
+
+        $start = Carbon::parse($this->Pending_Start)->timestamp;
+        $now = Carbon::now()->timestamp;
+
+        if ($this->Pending_Stop) {
+            $end = Carbon::parse($this->Pending_Stop)->timestamp;
+            return max(0, $end - $start);
+        }
+
+        if ($this->Status === 'PENDING') {
+            return max(0, $now - $start);
+        }
+
+        return 0;
     }
 
-    public function getPendingDurationAttribute(): string
-    {
-        if (!$this->Pending_Start) return '00:00:00';
+    public function getCurrentTimer()
+{
+    $now = now()->getTimestamp();
+    $openSeconds = 0;
+    $pendingSeconds = 0;
 
-        $seconds = $this->Status === self::STATUS_PENDING
-            ? $this->Pending_Start->diffInSeconds(now())
-            : ($this->Pending_Stop ? $this->Pending_Start->diffInSeconds($this->Pending_Stop) : 0);
+    if ($this->Open_Time) {
+        $openStart = $this->Open_Time->getTimestamp();
 
-        return $this->formatDuration($seconds);
+        if ($this->Status === 'CLOSED' && $this->Closed_Time) {
+            // Hitung durasi open hingga Closed_Time
+            $openSeconds = $this->Closed_Time->getTimestamp() - $openStart;
+        } else {
+            // Hitung durasi open hingga sekarang
+            $openSeconds = $now - $openStart;
+        }
+
+        if ($this->Pending_Start) {
+            $pendingStart = $this->Pending_Start->getTimestamp();
+            if ($this->Pending_Stop) {
+                // Jika Pending_Stop ada, hitung durasi pending hingga Pending_Stop
+                $pendingSeconds = $this->Pending_Stop->getTimestamp() - $pendingStart;
+                if ($this->Status !== 'PENDING') {
+                    // Kurangi durasi pending dari durasi open
+                    $openSeconds -= $pendingSeconds;
+                }
+            } elseif ($this->Status === 'PENDING') {
+                // Jika masih PENDING, hitung durasi pending hingga sekarang
+                $pendingSeconds = $now - $pendingStart;
+            }
+        }
     }
 
-    public function getTotalDurationAttribute(): string
+    $totalSeconds = $openSeconds + $pendingSeconds;
+
+    return [
+        'open' => ['seconds' => max(0, $openSeconds)],
+        'pending' => ['seconds' => max(0, $pendingSeconds)],
+        'total' => ['seconds' => max(0, $totalSeconds)],
+    ];
+}
+
+
+    public function getTotalDurationAttribute()
     {
-        if (!$this->Open_Time) return '00:00:00';
-
-        $endTime = $this->Status === self::STATUS_CLOSED 
-            ? $this->Closed_Time 
-            : now();
-
-        $seconds = $this->Open_Time->diffInSeconds($endTime);
-
-        return $this->formatDuration(max(0, $seconds));
+        return $this->getOpenDurationAttribute() + $this->getPendingDurationAttribute();
     }
 
     private function formatDuration(int $seconds): string

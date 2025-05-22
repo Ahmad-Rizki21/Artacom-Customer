@@ -13,10 +13,20 @@ class TicketTimer extends Component
     public $totalDuration;
     public $lastUpdate;
 
-    protected $listeners = ['refresh' => 'refreshTimer'];
+    protected $listeners = [
+        'refresh' => 'refreshTimer',
+        'statusUpdated' => 'updateStatus'
+    ];
 
     public function mount()
     {
+        $this->refreshTimer();
+    }
+
+    public function updateStatus($newStatus)
+    {
+        $this->record->Status = $newStatus;
+        $this->record->refresh(); // Refresh the record to get updated timestamps
         $this->refreshTimer();
     }
 
@@ -39,7 +49,14 @@ class TicketTimer extends Component
     }
 
     public function render()
-    {
-        return view('filament.components.ticket-timer');
-    }
+{
+    return view('livewire.ticket-timer', [
+        'formattedOpenTime' => $this->formatTime($this->openTimeSeconds),
+        'formattedPendingTime' => $this->formatTime($this->pendingTimeSeconds),
+        'formattedTotalTime' => $this->formatTime($this->totalTimeSeconds),
+        'slaPercentage' => $this->slaPercentage ?? 0,
+        'slaColor' => $this->getSlaColor(),
+    ]);
+}
+
 }

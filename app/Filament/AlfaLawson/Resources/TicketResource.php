@@ -4,8 +4,10 @@ namespace App\Filament\AlfaLawson\Resources;
 
 use App\Filament\Exports\TicketExport;
 use App\Filament\AlfaLawson\Resources\TicketResource\Pages;
+use App\Filament\AlfaLawson\Resources\TableRemoteResource;
 use App\Models\AlfaLawson\Ticket;
 use App\Models\AlfaLawson\TableRemote;
+use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -15,321 +17,421 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Group;
 use Filament\Forms\Components\Tabs;
+use Filament\Forms\Components\Placeholder;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Card;
+use Filament\Forms\Components\Fieldset;
+use Filament\Forms\Components\Actions;
+use Filament\Forms\Components\Actions\Action;
+use Filament\Support\Enums\FontWeight;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Maatwebsite\Excel\Facades\Excel;
 
 class TicketResource extends Resource
 {
     protected static ?string $model = Ticket::class;
     protected static ?string $navigationIcon = 'heroicon-o-ticket';
-    protected static ?string $navigationLabel = 'Ticket';
+    protected static ?string $navigationLabel = 'Tickets';
     protected static ?string $navigationGroup = 'Support';
-    protected static ?string $modelLabel = 'Tickets';
+    protected static ?string $modelLabel = 'Ticket';
+    protected static ?string $pluralModelLabel = 'Tickets';
     protected static ?int $navigationSort = 0;
 
     public static function form(Form $form): Form
     {
-        $isCreate = $form->getOperation() === 'create';
-
-        if ($isCreate) {
-            return $form->schema([
-                Grid::make(12)->schema([
-                    Section::make('Ticket Information')
-                        ->description('Basic ticket information')
-                        ->icon('heroicon-o-ticket')
-                        ->collapsible()
-                        ->columnSpan(8)
+        // Shared schema for both create and edit modes
+        $mainSchema = fn (string $operation) => [
+            // Main Information Section
+            Section::make()
+                ->schema([
+                    Grid::make(2)
                         ->schema([
-                            Grid::make(2)->schema([
-                                Forms\Components\TextInput::make('No_Ticket')
-                                    ->label('No Ticket')
-                                    ->default(fn () => Ticket::generateTicketNumber())
-                                    ->disabled()
-                                    ->dehydrated()
-                                    ->required()
-                                    ->prefixIcon('heroicon-m-ticket'),
-
-                                Forms\Components\Select::make('Customer')
-                                    ->options(TableRemote::pluck('Customer', 'Customer'))
-                                    ->required()
-                                    ->searchable()
-                                    ->live()
-                                    ->prefixIcon('heroicon-m-building-office')
-                                    ->native(false),
-
-                                Forms\Components\Select::make('Site_ID')
-                                    ->label('Remote')
-                                    ->options(function (Forms\Get $get) {
-                                        $customer = $get('Customer');
-                                        return TableRemote::when($customer, fn ($query) => $query->where('Customer', $customer))
-                                            ->get()
-                                            ->mapWithKeys(fn ($remote) => [
-                                                $remote->Site_ID => "{$remote->Site_ID} - {$remote->Nama_Toko} - {$remote->IP_Address}",
-                                            ]);
-                                    })
-                                    ->required()
-                                    ->searchable()
-                                    ->live()
-                                    ->prefixIcon('heroicon-m-computer-desktop')
-                                    ->native(false),
-
-                                Forms\Components\Select::make('Catagory')
-                                    ->options([
-                                        'Internal' => 'Internal',
-                                        'Komplain' => 'Komplain',
-                                    ])
-                                    ->required()
-                                    ->native(false)
-                                    ->prefixIcon('heroicon-m-tag'),
-                            ]),
-                        ]),
-
-                    Section::make('Problem Details')
-                        ->description('Detailed information about the problem')
-                        ->icon('heroicon-o-exclamation-circle')
-                        ->collapsible()
-                        ->columnSpan(4)
-                        ->schema([
-                            Forms\Components\Textarea::make('Problem')
-                                ->label('Problem Description')
+                            TextInput::make('No_Ticket')
+                                ->label('Ticket Number')
+                                ->default(fn () => Ticket::generateTicketNumber())
+                                ->disabled()
+                                ->dehydrated()
                                 ->required()
-                                ->maxLength(255)
-                                ->rows(3),
+                                ->prefixIcon('heroicon-m-hashtag')
+                                ->extraInputAttributes([
+                                    'class' => 'bg-gray-100 font-mono text-sm border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
 
-                            Forms\Components\TextInput::make('Reported_By')
+                            Select::make('Open_Level')
+                                ->label('Priority Level')
+                                ->options([
+                                    'Level 1' => 'Level 1 - Low',
+                                    'Level 2' => 'Level 2 - Medium', 
+                                    'Level 3' => 'Level 3 - High',
+                                ])
+                                ->required()
+                                ->default('Level 1')
+                                ->prefixIcon('heroicon-m-exclamation-triangle')
+                                ->native(false)
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
+                        ])
+                        ->visible(fn () => $operation === 'create'),
+
+                    Grid::make(2)
+                        ->schema([
+                            Select::make('Customer')
+                                ->label('Customer')
+                                ->options(TableRemote::pluck('Customer', 'Customer'))
+                                ->required()
+                                ->searchable()
+                                ->preload()
+                                ->live(debounce: 500)
+                                ->prefixIcon('heroicon-m-building-office-2')
+                                ->native(false)
+                                ->placeholder('Select a customer')
+                                ->helperText('Select the customer associated with this ticket')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
+
+                            Select::make('Site_ID')
+                                ->label('Remote Site')
+                                ->options(function (Forms\Get $get) {
+                                    $customer = $get('Customer');
+                                    if (!$customer) {
+                                        return [];
+                                    }
+                                    return TableRemote::where('Customer', $customer)
+                                        ->get()
+                                        ->mapWithKeys(fn ($remote) => [
+                                            $remote->Site_ID => "{$remote->Site_ID} - {$remote->Nama_Toko}",
+                                        ]);
+                                })
+                                ->required()
+                                ->searchable()
+                                ->live()
+                                ->prefixIcon('heroicon-m-computer-desktop')
+                                ->native(false)
+                                ->placeholder('Select a site')
+                                ->helperText('Choose a site after selecting a customer')
+                                ->disabled(fn (Forms\Get $get): bool => empty($get('Customer')))
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
+
+                            Select::make('Catagory')
+                                ->label('Category')
+                                ->options([
+                                    'Internal' => 'Internal Issue',
+                                    'Komplain' => 'Customer Complaint',
+                                ])
+                                ->required()
+                                ->default('Internal')
+                                ->native(false)
+                                ->prefixIcon('heroicon-m-tag')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1)
+                                ->visible(fn () => $operation === 'create'),
+
+                            Select::make('Status')
+                                ->options([
+                                    'OPEN' => 'Open',
+                                    'CLOSED' => 'Closed',
+                                ])
+                                ->required()
+                                ->live()
+                                ->afterStateUpdated(function ($state, Forms\Set $set, ?Model $record) {
+                                    if ($state === 'CLOSED') {
+                                        $set('Closed_Time', $record?->Closed_Time ?? now());
+                                    } elseif ($state === 'OPEN') {
+                                        $set('Closed_Time', null);
+                                        $set('Action_Summry', null);
+                                    }
+                                })
+                                ->disabled(fn (?Model $record) => $record?->Status === 'CLOSED')
+                                ->dehydrated()
+                                ->native(false)
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1)
+                                ->visible(fn () => $operation === 'edit'),
+                        ]),
+                ])
+                ->heading(fn () => $operation === 'create' ? 'Create New Ticket' : 'Ticket Details')
+                ->description(fn () => $operation === 'create' ? 'Enter the details to create a new support ticket' : 'View and update ticket information')
+                ->icon('heroicon-m-ticket')
+                ->collapsible()
+                ->persistCollapsed()
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->id('basic-info'),
+
+            // Problem Details Section
+            Section::make('Problem Details')
+                ->schema([
+                    Textarea::make('Problem')
+                        ->label('Problem Description')
+                        ->required()
+                        ->rows(5)
+                        ->maxLength(500)
+                        ->placeholder('Describe the issue in detail...')
+                        ->helperText('Provide a clear and detailed description of the problem (max 500 characters)')
+                        ->extraAttributes([
+                            'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
+                        ])
+                        ->columnSpanFull(),
+
+                    Grid::make(2)
+                        ->schema([
+                            TextInput::make('Reported_By')
                                 ->label('Reported By')
-                                ->placeholder('Name of reporter (optional)')
+                                ->placeholder('Enter the name of the person reporting the issue')
+                                ->helperText('Optional: Name of the person who reported the issue')
                                 ->maxLength(100)
                                 ->prefixIcon('heroicon-m-user')
-                                ->default('-'),
-                            Forms\Components\TextInput::make('pic')
+                                ->default('-')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
+
+                            TextInput::make('pic')
                                 ->label('PIC Name')
+                                ->placeholder('Enter the name of the person in charge')
                                 ->maxLength(100)
-                                ->prefixIcon('heroicon-m-user-circle'),
+                                ->prefixIcon('heroicon-m-user-circle')
+                                ->helperText('Contact person at the site')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
 
-                            Forms\Components\TextInput::make('tlp_pic')
+                            TextInput::make('tlp_pic')
                                 ->label('PIC Phone')
+                                ->placeholder('+62 xxx-xxxx-xxxx')
                                 ->maxLength(20)
-                                ->prefixIcon('heroicon-m-phone'),
+                                ->prefixIcon('heroicon-m-phone')
+                                ->helperText('Contact number for the PIC')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
+                                ])
+                                ->columnSpan(1),
+
+                            Textarea::make('Problem_Summary')
+                                ->label('Internal Summary')
+                                ->rows(3)
+                                ->placeholder('Enter internal analysis of the problem...')
+                                ->helperText('For internal use - technical summary of the issue')
+                                ->extraAttributes([
+                                    'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
+                                ])
+                                ->columnSpan(1)
+                                ->visible(fn () => $operation === 'edit'),
                         ]),
-                ]),
-            ]);
-        }
+                ])
+                ->description('Provide detailed information about the reported issue')
+                ->icon('heroicon-m-exclamation-circle')
+                ->collapsible()
+                ->persistCollapsed()
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->id('problem-details'),
 
-        // Form Edit
-        return $form->schema([
-            Grid::make(12)->schema([
-                Section::make('Ticket Management')
-                    ->columnSpan(12)
-                    ->schema([
-                        Tabs::make('Ticket Management')
-                            ->tabs([
-                                Tabs\Tab::make('Basic Information')
-                                    ->icon('heroicon-o-information-circle')
-                                    ->badge(fn ($record) => $record->Status)
-                                    ->badgeColor(fn ($record) => match ($record->Status) {
-                                        'OPEN' => 'warning',
-                                        'PENDING' => 'info',
-                                        'CLOSED' => 'success',
-                                        default => 'secondary',
-                                    })
-                                    ->schema([
-                                        Grid::make(3)->schema([
-                                            Forms\Components\TextInput::make('No_Ticket')
-                                                ->disabled()
-                                                ->dehydrated()
-                                                ->prefixIcon('heroicon-m-ticket'),
+            // Status Management Section (Edit Mode)
+            Section::make('Status Management')
+                ->schema([
+                    Group::make([
+                        Textarea::make('Action_Summry')
+                            ->label('Resolution Summary')
+                            ->required()
+                            ->rows(5)
+                            ->placeholder('Detail the steps taken to resolve the issue...')
+                            ->helperText('Provide comprehensive details of the resolution')
+                            ->extraAttributes([
+                                'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
+                            ])
+                            ->columnSpanFull(),
 
-                                            Forms\Components\Select::make('Customer')
-                                                ->options(TableRemote::pluck('Customer', 'Customer'))
-                                                ->required()
-                                                ->searchable()
-                                                ->prefixIcon('heroicon-m-building-office')
-                                                ->native(false),
-
-                                            Forms\Components\Select::make('Site_ID')
-                                                ->label('Remote')
-                                                ->options(function (Forms\Get $get) {
-                                                    $customer = $get('Customer');
-                                                    return TableRemote::when($customer, fn ($q) => $q->where('Customer', $customer))
-                                                        ->get()
-                                                        ->mapWithKeys(fn ($remote) => [
-                                                            $remote->Site_ID => "{$remote->Site_ID} - {$remote->Nama_Toko} - {$remote->IP_Address}",
-                                                        ]);
-                                                })
-                                                ->required()
-                                                ->searchable()
-                                                ->prefixIcon('heroicon-m-computer-desktop')
-                                                ->native(false),
-
-                                            Forms\Components\Select::make('Status')
-                                                ->options([
-                                                    'OPEN' => 'OPEN',
-                                                    'PENDING' => 'PENDING',
-                                                    'CLOSED' => 'CLOSED',
-                                                ])
-                                                ->required()
-                                                ->live()
-                                                ->afterStateUpdated(function ($state, Forms\Set $set, $record) {
-                                                    if ($state === 'PENDING') {
-                                                        $set('Pending_Start', now());
-                                                        if (!$record || $record->Status !== 'PENDING') {
-                                                            $set('Pending_Reason', null);
-                                                        }
-                                                    } elseif ($state === 'CLOSED') {
-                                                        $set('Closed_Time', now());
-                                                    } elseif ($state === 'OPEN' && $record && $record->Status === 'PENDING') {
-                                                        $set('Pending_End', now());
-                                                    }
-                                                })
-                                                ->disabled(fn ($record) => $record?->Status === 'CLOSED')
-                                                ->dehydrated()
-                                                ->prefix(fn ($state) => match ($state) {
-                                                    'OPEN' => '🟡',
-                                                    'PENDING' => '🔵',
-                                                    'CLOSED' => '🟢',
-                                                    default => '⚪',
-                                                }),
-
-                                            Forms\Components\Select::make('Open_Level')
-                                                ->options([
-                                                    'Level 1' => 'Level 1',
-                                                    'Level 2' => 'Level 2',
-                                                    'Level 3' => 'Level 3',
-                                                ])
-                                                ->required()
-                                                ->native(false)
-                                                ->prefixIcon('heroicon-m-adjustments-vertical'),
-
-                                            Forms\Components\Select::make('Catagory')
-                                                ->options([
-                                                    'Internal' => 'Internal',
-                                                    'Komplain' => 'Komplain',
-                                                ])
-                                                ->required()
-                                                ->native(false)
-                                                ->prefixIcon('heroicon-m-tag'),
-                                        ]),
+                        Grid::make(2)
+                            ->schema([
+                                Placeholder::make('Closed_Time')
+                                    ->label('Closed At')
+                                    ->content(fn (?Model $record): string => 
+                                        $record?->Closed_Time 
+                                            ? Carbon::parse($record->Closed_Time)->format('d/m/Y H:i:s') 
+                                            : 'Will be set automatically'
+                                    )
+                                    ->extraAttributes([
+                                        'class' => 'text-gray-600',
                                     ]),
 
-                                Tabs\Tab::make('Problem Information')
-                                    ->icon('heroicon-o-exclamation-triangle')
-                                    ->schema([
-                                        Grid::make(2)->schema([
-                                            Forms\Components\Textarea::make('Problem')
-                                                ->columnSpan(2)
-                                                ->required()
-                                                ->rows(3),
-
-                                            Forms\Components\TextInput::make('Reported_By')
-                                            ->prefixIcon('heroicon-m-user')
-                                            ->formatStateUsing(fn ($state) => $state ?? '-')
-                                            ->default('-'),
-
-                                            Forms\Components\TextInput::make('pic')
-                                                ->label('PIC Name')
-                                                ->prefixIcon('heroicon-m-user-circle'),
-
-                                            Forms\Components\TextInput::make('tlp_pic')
-                                                ->label('PIC Phone')
-                                                ->prefixIcon('heroicon-m-phone'),
-
-                                            Forms\Components\Textarea::make('Problem_Summary')
-                                                ->label('Problem Description')
-                                                ->columnSpan(2)
-                                                ->rows(3),
-
-                                            Forms\Components\Textarea::make('Classification')
-                                                ->columnSpan(2)
-                                                ->rows(3),
-                                        ]),
-                                    ]),
-
-                                Tabs\Tab::make('Status Updates')
-                                    ->icon('heroicon-o-clock')
-                                    ->schema([
-                                        Grid::make(2)->schema([
-                                            // Open Time Information
-                                            Group::make([
-                                                Forms\Components\DateTimePicker::make('Open_Time')
-                                                    ->label('Opened At')
-                                                    ->disabled()
-                                                    ->dehydrated(),
-
-                                                Forms\Components\TextInput::make('openedBy.name')
-                                                    ->label('Opened By')
-                                                    ->formatStateUsing(fn ($record) => $record?->openedBy?->name ?? 'Unknown User')
-                                                    ->disabled()
-                                                    ->dehydrated(false),
-                                            ])->columns(2),
-
-                                            // Pending Information
-                                            Group::make([
-                                                Forms\Components\DateTimePicker::make('Pending_Start')
-                                                    ->label('Pending Since')
-                                                    ->disabled()
-                                                    ->hidden(fn (Forms\Get $get) => $get('Status') !== 'PENDING'),
-
-                                                Forms\Components\Textarea::make('Pending_Reason')
-                                                    ->label('Reason for Pending')
-                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING')
-                                                    ->rows(2),
-                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'PENDING'),
-
-                                            // Closing Information
-                                            Group::make([
-                                                Forms\Components\Textarea::make('Action_Summry')
-                                                    ->label('Action Summary')
-                                                    ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                                                    ->rows(3)
-                                                    ->disabled(fn ($record) => $record?->Status !== 'CLOSED'),
-
-                                                Forms\Components\DateTimePicker::make('Closed_Time')
-                                                    ->label('Closed At')
-                                                    ->disabled()
-                                                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-                                            ])->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
-                                        ]),
-                                    ]),
-
-                                Tabs\Tab::make('Closed')
-                                    ->icon('heroicon-o-check-circle')
-                                    ->schema([
-                                        Forms\Components\Textarea::make('Action_Summry')
-                                            ->label('Action Summary')
-                                            ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
-                                            ->rows(5),
-
-                                        Forms\Components\Placeholder::make('ticket_duration')
-                                            ->label('Ticket Duration')
-                                            ->content(function ($record) {
-                                                if (!$record) {
-                                                    return '-';
-                                                }
-
-                                                $start = Carbon::parse($record->Open_Time);
-                                                $end = match ($record->Status) {
-                                                    'CLOSED' => Carbon::parse($record->Closed_Time),
-                                                    'PENDING' => Carbon::parse($record->Pending_Start),
-                                                    default => now(),
-                                                };
-
-                                                return $start->diffForHumans($end, true);
-                                            }),
+                                Placeholder::make('closedBy.name')
+                                    ->label('Closed By')
+                                    ->content(fn (?Model $record): string => 
+                                        $record?->closedBy?->name ?? Auth::user()?->name ?? 'Current User'
+                                    )
+                                    ->extraAttributes([
+                                        'class' => 'text-gray-600',
                                     ]),
                             ]),
-                    ]),
-            ]),
-        ]);
+                    ])
+                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+                ])
+                ->description('Manage ticket status and resolution details')
+                ->icon('heroicon-m-clock')
+                ->collapsible()
+                ->persistCollapsed()
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->id('status-management')
+                ->visible(fn () => $operation === 'edit'),
+
+            // Ticket Timeline Section (Edit Mode)
+            Section::make('Ticket Timeline')
+                ->schema([
+                    Grid::make(3)
+                        ->schema([
+                            Placeholder::make('Open_Time')
+                                ->label('Opened')
+                                ->content(fn (?Model $record): string => 
+                                    $record?->Open_Time 
+                                        ? Carbon::parse($record->Open_Time)->format('d/m/Y H:i') 
+                                        : '-'
+                                )
+                                ->extraAttributes([
+                                    'class' => 'text-gray-600',
+                                ]),
+
+                            Placeholder::make('openedBy.name')
+                                ->label('Opened By')
+                                ->content(fn (?Model $record): string => 
+                                    $record?->openedBy?->name ?? 'Unknown'
+                                )
+                                ->extraAttributes([
+                                    'class' => 'text-gray-600',
+                                ]),
+
+                        
+                        ]),
+                ])
+                ->description('Track the lifecycle and timing of the ticket')
+                ->icon('heroicon-m-calendar-days')
+                ->collapsible()
+                ->collapsed()
+                ->persistCollapsed()
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->id('ticket-timeline')
+                ->visible(fn () => $operation === 'edit'),
+        ];
+
+        // Sidebar schema for edit mode
+        $sidebarSchema = [
+            Section::make('Quick Actions')
+                ->schema([
+                    Actions::make([
+                        Action::make('viewSite')
+                            ->label('View Site Details')
+                            ->icon('heroicon-m-map-pin')
+                            ->color('info')
+                             ->url(function (?Model $record) {
+                                if (!$record || !$record->Site_ID) {
+                                    return null;
+                                }
+                                // Find the TableRemote record by Site_ID
+                                $site = TableRemote::where('Site_ID', $record->Site_ID)->first();
+                                if (!$site) {
+                                    return null;
+                                }
+                                // Pass the TableRemote model instance directly to getUrl
+                                return TableRemoteResource::getUrl('view', ['record' => $site]);
+                            })
+                            ->extraAttributes([
+                                'class' => 'w-full bg-info-600 hover:bg-info-700 text-white font-medium py-2 px-4 rounded-lg transition-colors',
+                            ])
+                            ->visible(fn (?Model $record) => (bool) $record),
+
+                        Action::make('contactPIC')
+                            ->label('Contact PIC')
+                            ->icon('heroicon-m-phone')
+                            ->color('success')
+                            ->action(fn (?Model $record) => null) // Add contact logic
+                            ->extraAttributes([
+                                'class' => 'w-full bg-success-600 hover:bg-success-700 text-white font-medium py-2 px-4 rounded-lg transition-colors mt-2',
+                            ])
+                            ->visible(fn (?Model $record) => (bool) $record?->tlp_pic),
+                    ])
+                    ->fullWidth(),
+                ])
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->compact(),
+
+            Section::make('System Info')
+                ->schema([
+                    Placeholder::make('created_info')
+                        ->label('Created')
+                        ->content(fn (?Model $record): string => 
+                            $record?->created_at 
+                                ? $record->created_at->format('d/m/Y H:i') 
+                                : 'New ticket'
+                        )
+                        ->extraAttributes([
+                            'class' => 'text-gray-600',
+                        ]),
+
+                    Placeholder::make('updated_info')
+                        ->label('Last Updated')
+                        ->content(fn (?Model $record): string => 
+                            $record?->updated_at 
+                                ? $record->updated_at->diffForHumans() 
+                                : 'Not saved yet'
+                        )
+                        ->extraAttributes([
+                            'class' => 'text-gray-600',
+                        ]),
+                ])
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6',
+                ])
+                ->compact(),
+        ];
+
+        return $form->schema([
+            Group::make()
+                ->schema($mainSchema('create'))
+                ->columnSpan(['lg' => 12])
+                ->visible(fn (string $operation): bool => $operation === 'create'),
+
+            Group::make()
+                ->schema($mainSchema('edit'))
+                ->columnSpan(['lg' => 8])
+                ->visible(fn (string $operation): bool => $operation === 'edit'),
+
+            Group::make()
+                ->schema($sidebarSchema)
+                ->columnSpan(['lg' => 4])
+                ->visible(fn (string $operation): bool => $operation === 'edit'),
+        ])
+        ->columns(12);
     }
 
     public static function table(Table $table): Table
@@ -337,69 +439,122 @@ class TicketResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('No_Ticket')
+                    ->label('Ticket #')
                     ->searchable()
                     ->sortable()
                     ->copyable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->weight(FontWeight::Bold)
+                    ->color('primary'),
+                    
                 TextColumn::make('Customer')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->badge()
+                    ->color('gray'),
+                    
                 TextColumn::make('Site_ID')
-                    ->label('Remote')
+                    ->label('Site')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->limit(30),
+                    
                 TextColumn::make('Problem')
-                    ->label('Problem Description')
+                    ->label('Problem')
                     ->searchable()
                     ->wrap()
-                    ->limit(30)
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->limit(50)
+                    ->tooltip(function (TextColumn $column): ?string {
+                        $state = $column->getState();
+                        if (strlen($state) <= 50) {
+                            return null;
+                        }
+                        return $state;
+                    }),
+                    
                 TextColumn::make('Reported_By')
+                    ->label('Reported By')
                     ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->placeholder('-'),
+                    
+                TextColumn::make('pic')
+                    ->label('PIC')
+                    ->searchable()
+                    ->placeholder('-'),
+                    
+                TextColumn::make('tlp_pic')
+                    ->label('PIC Phone')
+                    ->searchable()
+                    ->placeholder('-'),
+                    
                 TextColumn::make('Status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'OPEN' => 'warning',
-                        'PENDING' => 'info',
                         'CLOSED' => 'success',
-                        default => 'secondary',
-                    })
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                        default => 'gray',
+                    }),
+                    
+                TextColumn::make('Open_Level')
+                    ->label('Priority')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Level 3' => 'danger',
+                        'Level 2' => 'warning',
+                        'Level 1' => 'success',
+                        default => 'gray',
+                    }),
+                    
                 TextColumn::make('Open_Time')
-                    ->dateTime()
+                    ->label('Created')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
-                // Add Closed_Time column to make closed ticket info more visible
-                TextColumn::make('Closed_Time')
-                    ->label('Closed At')
-                    ->dateTime()
-                    ->sortable()
-                    ->placeholder('Not Closed')
-                    ->toggleable(isToggledHiddenByDefault: false),
-
+                    ->since()
+                    ->description(fn ($record): string => 
+                        $record->Open_Time ? Carbon::parse($record->Open_Time)->format('d/m/Y') : ''
+                    ),
+                    
                 TextColumn::make('openedBy.name')
                     ->label('Opened By')
                     ->searchable()
+                    ->placeholder('Unknown'),
+                    
+                TextColumn::make('Closed_Time')
+                    ->label('Closed')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
-
-                TextColumn::make('Created_By')
-                    ->getStateUsing(fn ($record) => optional($record->openedBy)->name)
+                    ->since()
+                    ->description(fn ($record): string => 
+                        $record->Closed_Time ? Carbon::parse($record->Closed_Time)->format('d/m/Y') : ''
+                    )
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                TextColumn::make('closedBy.name')
+                    ->label('Closed By')
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+                    ->placeholder('Not closed')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                    
+                // TextColumn::make('ticket_duration')
+                //     ->label('Duration')
+                //     ->getStateUsing(function ($record) {
+                //         if (!$record->Open_Time) {
+                //             return '-';
+                //         }
+                //         $start = Carbon::parse($record->Open_Time);
+                //         $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
+                //         $diffInSeconds = $start->diffInSeconds($end);
+                //         return sprintf(
+                //             '%02d:%02d:%02d',
+                //             floor($diffInSeconds / 3600),
+                //             floor(($diffInSeconds % 3600) / 60),
+                //             $diffInSeconds % 60
+                //         );
+                //     })
+                //     ->sortable(query: fn (Builder $query, string $direction) => 
+                //         $query->orderByRaw("TIMESTAMPDIFF(SECOND, Open_Time, COALESCE(Closed_Time, NOW())) {$direction}")
+                //     ),
             ])
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('Open_Time', 'desc')
             ->filters([
                 SelectFilter::make('Status')
                     ->options([
@@ -468,17 +623,22 @@ class TicketResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                
                 Tables\Actions\Action::make('closeTicket')
-                    ->label('CLOSED')
-                    ->icon('heroicon-o-check-circle')
+                    ->label('Close')
+                    ->icon('heroicon-m-check-circle')
                     ->color('success')
                     ->visible(fn ($record) => $record->Status !== 'CLOSED')
                     ->form([
-                        Forms\Components\Textarea::make('action_summary')
-                            ->label('Action Summary')
+                        Textarea::make('action_summary')
+                            ->label('Resolution Summary')
                             ->required()
-                            ->rows(3)
-                            ->helperText('Provide a summary of the actions taken.'),
+                            ->rows(4)
+                            ->placeholder('Describe how the issue was resolved...')
+                            ->helperText('Provide detailed resolution steps')
+                            ->extraAttributes([
+                                'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
+                            ]),
                     ])
                     ->action(function ($record, array $data) {
                         $record->update([
@@ -489,15 +649,18 @@ class TicketResource extends Resource
                         ]);
                     })
                     ->modalHeading('Close Ticket')
-                    ->modalSubmitActionLabel('Confirm Close')
+                    ->modalDescription('Mark this ticket as resolved')
+                    ->modalSubmitActionLabel('Close Ticket')
                     ->modalWidth('lg'),
             ])
-        
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->emptyStateHeading('No tickets found')
+            ->emptyStateDescription('Create your first ticket to get started')
+            ->emptyStateIcon('heroicon-o-ticket');
     }
 
     public static function getRelations(): array
@@ -515,17 +678,19 @@ class TicketResource extends Resource
         ];
     }
 
+    public static function getNavigationBadge(): ?string
+    {
+        $openCount = static::getModel()::where('Status', 'OPEN')->count();
+        
+        return $openCount > 0 ? (string) $openCount : null;
+    }
 
     public static function getNavigationBadgeColor(): ?string
     {
         $openCount = static::getModel()::where('Status', 'OPEN')->count();
-        $pendingCount = static::getModel()::where('Status', 'PENDING')->count();
 
         if ($openCount > 0) {
             return 'danger';
-        }
-        if ($pendingCount > 0) {
-            return 'warning';
         }
         return 'success';
     }

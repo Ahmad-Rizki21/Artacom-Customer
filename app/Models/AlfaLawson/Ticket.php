@@ -81,7 +81,7 @@ class Ticket extends Model
             $model->Status = static::STATUS_OPEN;
             $model->Open_By = Auth::id();
             $model->Open_Time = now();
-            $model->Reported_By = $model->Reported_By ?: Auth::id();
+            // Removed: $model->Reported_By = $model->Reported_By ?: Auth::id();
             
             // Set Open_Level from the user's Level
             $model->Open_Level = Auth::user()->Level ?? 'Level 1';
@@ -89,40 +89,6 @@ class Ticket extends Model
             Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
         });
 
-        // static::updating(function ($model) {
-        //         if ($model->isDirty('Status')) {
-        //             $oldStatus = $model->getOriginal('Status');
-        //             $newStatus = $model->Status;
-
-        //             switch ($newStatus) {
-        //                 case static::STATUS_PENDING:
-        //                     $model->Pending_Start = now();
-        //                     $model->Pending_Stop = null;
-        //                     if (empty(trim($model->Pending_Reason))) {
-        //                         throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
-        //                     }
-        //                     break;
-
-        //                 case static::STATUS_CLOSED:
-        //                     if (empty(trim($model->Action_Summry))) {
-        //                         throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
-        //                     }
-        //                     // Remove the length check (strlen < 10)
-        //                     $model->Closed_Time = now();
-        //                     $model->Closed_By = Auth::id();
-        //                     if ($oldStatus === static::STATUS_PENDING) {
-        //                         $model->Pending_Stop = now();
-        //                     }
-        //                     break;
-
-        //                 case static::STATUS_OPEN:
-        //                     if ($oldStatus === static::STATUS_PENDING) {
-        //                         $model->Pending_Stop = now();
-        //                     }
-        //                     break;
-        //             }
-        //         }
-        //     });
         static::updating(function ($model) {
             if ($model->isDirty('Status')) {
                 $oldStatus = $model->getOriginal('Status');
@@ -159,7 +125,7 @@ class Ticket extends Model
     }
 
     // Duration calculations
-public function getOpenDurationAttribute()
+    public function getOpenDurationAttribute()
     {
         if (!$this->Open_Time) return 0;
 
@@ -193,7 +159,8 @@ public function getOpenDurationAttribute()
 
         return 0;
     }
-public function getPendingDurationAttribute()
+
+    public function getPendingDurationAttribute()
     {
         if (!$this->Pending_Start) return 0;
 
@@ -213,47 +180,46 @@ public function getPendingDurationAttribute()
     }
 
     public function getCurrentTimer()
-{
-    $now = now()->getTimestamp();
-    $openSeconds = 0;
-    $pendingSeconds = 0;
+    {
+        $now = now()->getTimestamp();
+        $openSeconds = 0;
+        $pendingSeconds = 0;
 
-    if ($this->Open_Time) {
-        $openStart = $this->Open_Time->getTimestamp();
+        if ($this->Open_Time) {
+            $openStart = $this->Open_Time->getTimestamp();
 
-        if ($this->Status === 'CLOSED' && $this->Closed_Time) {
-            // Hitung durasi open hingga Closed_Time
-            $openSeconds = $this->Closed_Time->getTimestamp() - $openStart;
-        } else {
-            // Hitung durasi open hingga sekarang
-            $openSeconds = $now - $openStart;
-        }
+            if ($this->Status === 'CLOSED' && $this->Closed_Time) {
+                // Hitung durasi open hingga Closed_Time
+                $openSeconds = $this->Closed_Time->getTimestamp() - $openStart;
+            } else {
+                // Hitung durasi open hingga sekarang
+                $openSeconds = $now - $openStart;
+            }
 
-        if ($this->Pending_Start) {
-            $pendingStart = $this->Pending_Start->getTimestamp();
-            if ($this->Pending_Stop) {
-                // Jika Pending_Stop ada, hitung durasi pending hingga Pending_Stop
-                $pendingSeconds = $this->Pending_Stop->getTimestamp() - $pendingStart;
-                if ($this->Status !== 'PENDING') {
-                    // Kurangi durasi pending dari durasi open
-                    $openSeconds -= $pendingSeconds;
+            if ($this->Pending_Start) {
+                $pendingStart = $this->Pending_Start->getTimestamp();
+                if ($this->Pending_Stop) {
+                    // Jika Pending_Stop ada, hitung durasi pending hingga Pending_Stop
+                    $pendingSeconds = $this->Pending_Stop->getTimestamp() - $pendingStart;
+                    if ($this->Status !== 'PENDING') {
+                        // Kurangi durasi pending dari durasi open
+                        $openSeconds -= $pendingSeconds;
+                    }
+                } elseif ($this->Status === 'PENDING') {
+                    // Jika masih PENDING, hitung durasi pending hingga sekarang
+                    $pendingSeconds = $now - $pendingStart;
                 }
-            } elseif ($this->Status === 'PENDING') {
-                // Jika masih PENDING, hitung durasi pending hingga sekarang
-                $pendingSeconds = $now - $pendingStart;
             }
         }
+
+        $totalSeconds = $openSeconds + $pendingSeconds;
+
+        return [
+            'open' => ['seconds' => max(0, $openSeconds)],
+            'pending' => ['seconds' => max(0, $pendingSeconds)],
+            'total' => ['seconds' => max(0, $totalSeconds)],
+        ];
     }
-
-    $totalSeconds = $openSeconds + $pendingSeconds;
-
-    return [
-        'open' => ['seconds' => max(0, $openSeconds)],
-        'pending' => ['seconds' => max(0, $pendingSeconds)],
-        'total' => ['seconds' => max(0, $totalSeconds)],
-    ];
-}
-
 
     public function getTotalDurationAttribute()
     {
@@ -283,11 +249,6 @@ public function getPendingDurationAttribute()
     public function openedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'Open_By', 'id');
-    }
-
-    public function reportedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'Reported_By', 'id');
     }
 
     public function closedBy(): BelongsTo

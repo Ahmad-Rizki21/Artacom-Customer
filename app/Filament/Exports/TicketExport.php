@@ -71,31 +71,34 @@ class TicketExport implements
             ->orderBy('Action_Time', 'desc')
             ->first();
 
-        // Log the raw timestamps to debug
-        Log::info("Ticket {$ticket->No_Ticket} Timestamps", [
-            'Open_Time' => $ticket->Open_Time ? $ticket->Open_Time->toDateTimeString() : null,
-            'Pending_Start' => $ticket->Pending_Start ? $ticket->Pending_Start->toDateTimeString() : null,
-            'Pending_Stop' => $ticket->Pending_Stop ? $ticket->Pending_Stop->toDateTimeString() : null,
-            'Closed_Time' => $ticket->Closed_Time ? $ticket->Closed_Time->toDateTimeString() : null,
-        ]);
+        // Parse durations to seconds using the safe parsing function
+        // Use null coalescing operator (??) to provide default value if property is null
+        $openDurationSeconds = $this->parseDurationToSeconds($ticket->open_duration ?? '00:00:00');
+        $totalPendingSeconds = $this->parseDurationToSeconds($ticket->pending_duration ?? '00:00:00');
+        $totalDurationSeconds = $this->parseDurationToSeconds($ticket->total_duration ?? '00:00:00');
 
-        // Log the calculated durations
-        Log::info("Ticket {$ticket->No_Ticket} Durations", [
-            'open_duration' => $ticket->open_duration,
-            'pending_duration' => $ticket->pending_duration,
-            'total_duration' => $ticket->total_duration,
-        ]);
-
-        $totalDurationSeconds = $this->parseDurationToSeconds($ticket->total_duration);
-        $totalPendingSeconds = $this->parseDurationToSeconds($ticket->pending_duration);
+        // Calculate downtime in seconds, ensuring it's not negative
         $downtimeSeconds = max(0, $totalDurationSeconds - $totalPendingSeconds);
-        $downtime = $this->formatDuration($downtimeSeconds);
 
-        Log::info("Ticket {$ticket->No_Ticket} Downtime Calculation", [
-            'total_duration_seconds' => $totalDurationSeconds,
-            'total_pending_seconds' => $totalPendingSeconds,
+        // Format all durations back to HH:MM:SS
+        $openDurationFormatted = $this->formatDuration($openDurationSeconds);
+        $totalPendingFormatted = $this->formatDuration($totalPendingSeconds);
+        $totalDurationFormatted = $this->formatDuration($totalDurationSeconds);
+        $downtimeFormatted = $this->formatDuration($downtimeSeconds);
+
+        // Log for debugging (optional but good practice)
+        Log::info("Ticket {$ticket->No_Ticket} Export Durations", [
+            'open_duration_raw' => $ticket->open_duration,
+            'pending_duration_raw' => $ticket->pending_duration,
+            'total_duration_raw' => $ticket->total_duration,
+            'open_seconds' => $openDurationSeconds,
+            'pending_seconds' => $totalPendingSeconds,
+            'total_seconds' => $totalDurationSeconds,
             'downtime_seconds' => $downtimeSeconds,
-            'downtime' => $downtime,
+            'open_formatted' => $openDurationFormatted,
+            'pending_formatted' => $totalPendingFormatted,
+            'total_formatted' => $totalDurationFormatted,
+            'downtime_formatted' => $downtimeFormatted,
         ]);
 
         return [
@@ -108,13 +111,13 @@ class TicketExport implements
             $ticket->Problem_Summary ?? '-',
             $ticket->Status ?? '-',
             optional($ticket->Open_Time)->format('d/m/Y H:i:s') ?? '-',
-            optional($ticket->Pending_Start)->format('d/m/Y H:i:s') ?? '-',
+            optional($ticket->Pending_Start)->format('d/m/Y H:i:s') ?? '-', // Note: This is Pending Start Date, not duration
             optional($ticket->Closed_Time)->format('d/m/Y H:i:s') ?? '-',
             $latestAction->Action_Description ?? '-',
-            $ticket->open_duration ?? '00:00:00', // Open Clock
-            $ticket->pending_duration ?? '00:00:00', // Total Pending
-            $ticket->total_duration ?? '00:00:00', // Total Duration
-            $downtime, // Downtime = Total Duration - Pending Duration
+            $openDurationFormatted, // Open Clock (Formatted)
+            $totalPendingFormatted, // Total Pending (Formatted)
+            $totalDurationFormatted, // Total Duration (Formatted)
+            $downtimeFormatted, // Downtime (Formatted)
         ];
     }
 
@@ -246,14 +249,42 @@ class TicketExport implements
         ];
     }
 
-    private function parseDurationToSeconds(string $duration): int
+    private function parseDurationToSeconds(string $duration = '00:00:00'): int
     {
-        [$hours, $minutes, $seconds] = array_map('intval', explode(':', $duration));
+        // Validasi format dan berikan nilai default jika tidak valid
+        if (empty($duration) || !preg_match('/^\d{2}:\d{2}:\d{2}$/', $duration)) {
+            // Coba parsing jika formatnya hanya detik (misal dari model)
+            if (is_numeric($duration)) {
+                return (int) $duration;
+            }
+            Log::warning("Invalid duration format encountered: {$duration}. Defaulting to 0 seconds.");
+            return 0; // Return 0 seconds if format is invalid and not numeric
+        }
+        
+        // Sekarang aman untuk melakukan explode karena format sudah dipastikan valid
+        $parts = explode(':', $duration);
+        
+        // Pastikan array memiliki 3 elemen (jam, menit, detik)
+        if (count($parts) !== 3) {
+             Log::warning("Exploded duration does not have 3 parts: {$duration}. Defaulting to 0 seconds.");
+            return 0; // Return 0 jika format tidak sesuai setelah explode
+        }
+        
+        // Konversi ke integer dan hitung total detik
+        $hours = (int) $parts[0];
+        $minutes = (int) $parts[1];
+        $seconds = (int) $parts[2];
+        
         return ($hours * 3600) + ($minutes * 60) + $seconds;
     }
 
+
     private function formatDuration(int $seconds): string
     {
+        if ($seconds < 0) {
+             Log::warning("Negative duration encountered: {$seconds} seconds. Formatting as 00:00:00.");
+             $seconds = 0;
+        }
         return sprintf('%02d:%02d:%02d',
             floor($seconds / 3600),
             floor(($seconds % 3600) / 60),
@@ -261,3 +292,4 @@ class TicketExport implements
         );
     }
 }
+

@@ -68,7 +68,7 @@ class TicketResource extends Resource
                                 ->columnSpan(1),
 
                             Select::make('Open_Level')
-                                ->label('Priority Level')
+                                ->label('Open Level')
                                 ->options([
                                     'Level 1' => 'Level 1 - Low',
                                     'Level 2' => 'Level 2 - Medium', 
@@ -119,6 +119,21 @@ class TicketResource extends Resource
                                 ->required()
                                 ->searchable()
                                 ->live()
+                                ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                    if ($state) {
+                                        $remote = TableRemote::where('Site_ID', $state)->first();
+                                        if ($remote) {
+                                            $set('pic', $remote->PIC ?? '-');
+                                            $set('tlp_pic', $remote->tlp_pic ?? '-');
+                                        } else {
+                                            $set('pic', '-');
+                                            $set('tlp_pic', '-');
+                                        }
+                                    } else {
+                                        $set('pic', '-');
+                                        $set('tlp_pic', '-');
+                                    }
+                                })
                                 ->prefixIcon('heroicon-m-computer-desktop')
                                 ->native(false)
                                 ->placeholder('Select a site')
@@ -214,7 +229,7 @@ class TicketResource extends Resource
                                 ->placeholder('Enter the name of the person in charge')
                                 ->maxLength(100)
                                 ->prefixIcon('heroicon-m-user-circle')
-                                ->helperText('Contact person at the site')
+                                ->helperText('Contact person at the site (auto-filled based on Site ID)')
                                 ->extraAttributes([
                                     'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
                                 ])
@@ -225,7 +240,7 @@ class TicketResource extends Resource
                                 ->placeholder('+62 xxx-xxxx-xxxx')
                                 ->maxLength(20)
                                 ->prefixIcon('heroicon-m-phone')
-                                ->helperText('Contact number for the PIC')
+                                ->helperText('Contact number for the PIC (auto-filled based on Site ID)')
                                 ->extraAttributes([
                                     'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
                                 ])
@@ -327,7 +342,19 @@ class TicketResource extends Resource
                                     'class' => 'text-gray-600',
                                 ]),
 
-                        
+                            Placeholder::make('ticket_duration')
+                                ->label('Duration')
+                                ->content(function (?Model $record) {
+                                    if (!$record || !$record->Open_Time) {
+                                        return '-';
+                                    }
+                                    $start = Carbon::parse($record->Open_Time);
+                                    $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
+                                    return $start->diffForHumans($end, true);
+                                })
+                                ->extraAttributes([
+                                    'class' => 'text-gray-600',
+                                ]),
                         ]),
                 ])
                 ->description('Track the lifecycle and timing of the ticket')
@@ -351,16 +378,14 @@ class TicketResource extends Resource
                             ->label('View Site Details')
                             ->icon('heroicon-m-map-pin')
                             ->color('info')
-                             ->url(function (?Model $record) {
+                            ->url(function (?Model $record) {
                                 if (!$record || !$record->Site_ID) {
                                     return null;
                                 }
-                                // Find the TableRemote record by Site_ID
                                 $site = TableRemote::where('Site_ID', $record->Site_ID)->first();
                                 if (!$site) {
                                     return null;
                                 }
-                                // Pass the TableRemote model instance directly to getUrl
                                 return TableRemoteResource::getUrl('view', ['record' => $site]);
                             })
                             ->extraAttributes([
@@ -476,12 +501,12 @@ class TicketResource extends Resource
                     ->searchable()
                     ->placeholder('-'),
                     
-                TextColumn::make('pic')
+                TextColumn::make('Pic')
                     ->label('PIC')
                     ->searchable()
                     ->placeholder('-'),
                     
-                TextColumn::make('tlp_pic')
+                TextColumn::make('Tlp_Pic')
                     ->label('PIC Phone')
                     ->searchable()
                     ->placeholder('-'),
@@ -495,7 +520,7 @@ class TicketResource extends Resource
                     }),
                     
                 TextColumn::make('Open_Level')
-                    ->label('Priority')
+                    ->label('Open Level')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'Level 3' => 'danger',
@@ -534,25 +559,25 @@ class TicketResource extends Resource
                     ->placeholder('Not closed')
                     ->toggleable(isToggledHiddenByDefault: true),
                     
-                // TextColumn::make('ticket_duration')
-                //     ->label('Duration')
-                //     ->getStateUsing(function ($record) {
-                //         if (!$record->Open_Time) {
-                //             return '-';
-                //         }
-                //         $start = Carbon::parse($record->Open_Time);
-                //         $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
-                //         $diffInSeconds = $start->diffInSeconds($end);
-                //         return sprintf(
-                //             '%02d:%02d:%02d',
-                //             floor($diffInSeconds / 3600),
-                //             floor(($diffInSeconds % 3600) / 60),
-                //             $diffInSeconds % 60
-                //         );
-                //     })
-                //     ->sortable(query: fn (Builder $query, string $direction) => 
-                //         $query->orderByRaw("TIMESTAMPDIFF(SECOND, Open_Time, COALESCE(Closed_Time, NOW())) {$direction}")
-                //     ),
+                TextColumn::make('ticket_duration')
+                    ->label('Duration')
+                    ->getStateUsing(function ($record) {
+                        if (!$record->Open_Time) {
+                            return '-';
+                        }
+                        $start = Carbon::parse($record->Open_Time);
+                        $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
+                        $diffInSeconds = $start->diffInSeconds($end);
+                        return sprintf(
+                            '%02d:%02d:%02d',
+                            floor($diffInSeconds / 3600),
+                            floor(($diffInSeconds % 3600) / 60),
+                            $diffInSeconds % 60
+                        );
+                    })
+                    ->sortable(query: fn (Builder $query, string $direction) => 
+                        $query->orderByRaw("TIMESTAMPDIFF(SECOND, Open_Time, COALESCE(Closed_Time, NOW())) {$direction}")
+                    ),
             ])
             ->defaultSort('Open_Time', 'desc')
             ->filters([
@@ -620,6 +645,7 @@ class TicketResource extends Resource
             ])
             ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
+
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),

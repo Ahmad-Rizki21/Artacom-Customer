@@ -193,21 +193,21 @@ class ViewTicket extends ViewRecord
                                     ])
                                     ->columns(3),
 
-                               Section::make('Problem Details')
-                            ->schema([
-                                TextEntry::make('Problem')
-                                    ->columnSpanFull(),
-                                TextEntry::make('Reported_By')
+                                Section::make('Problem Details')
+                                    ->schema([
+                                        TextEntry::make('Problem')
+                                            ->columnSpanFull(),
+                                        TextEntry::make('Reported_By')
                                             ->label('Reported By')
                                             ->default('-'),
-                                TextEntry::make('pic')
-                                    ->label('PIC')
-                                    ->default('-'),
-                                TextEntry::make('tlp_pic')
-                                    ->label('PIC Phone')
-                                    ->default('-'),
-                            ])
-                            ->columns(2),
+                                        TextEntry::make('Pic')
+                                            ->label('PIC')
+                                            ->getStateUsing(fn ($record) => $record->Pic ?? '-'),
+                                        TextEntry::make('Tlp_Pic')
+                                            ->label('PIC Phone')
+                                            ->getStateUsing(fn ($record) => $record->Tlp_Pic ?? '-'),
+                                    ])
+                                    ->columns(2),
 
                                 Section::make('Progress History')
                                     ->schema([

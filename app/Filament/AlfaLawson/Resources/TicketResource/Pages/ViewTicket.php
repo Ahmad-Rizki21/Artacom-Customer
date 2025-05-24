@@ -213,7 +213,10 @@ class ViewTicket extends ViewRecord
                                     ->schema([
                                         ViewEntry::make('progress_timeline')
                                             ->view('filament.resources.ticket-progress-timeline')
-                                            ->viewData(['record' => $this->record, 'livewire' => $this]),
+                                            ->viewData([
+                                                'record' => $this->record,
+                                                'actions' => $this->record->actions()->orderBy('Action_Time', 'desc')->get(),
+                                            ]),
                                     ]),
                             ]),
 

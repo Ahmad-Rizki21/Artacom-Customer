@@ -6,6 +6,7 @@ use App\Filament\AlfaLawson\Resources\TicketResource;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
 use Filament\Notifications\Notification;
+use App\Models\AlfaLawson\TicketAction;
 
 class CreateTicket extends CreateRecord
 {
@@ -29,11 +30,31 @@ class CreateTicket extends CreateRecord
 
     protected function afterCreate(): void
     {
-        Notification::make()
-            ->title('Ticket Created Successfully')
-            ->icon('heroicon-o-credit-card')
-            ->body('A new ticket has been created with ID: ' . $this->record->No_Ticket)
-            ->success()
-            ->send();
+        try {
+            // Buat entri awal di TicketAction berdasarkan Problem
+            TicketAction::create([
+                'No_Ticket' => $this->record->No_Ticket,
+                'Action_Taken' => 'OPEN', // Status awal sebagai 'Note'
+                'Action_Time' => now(),
+                'Action_By' => Auth::user()->name,
+                'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                'Action_Description' => $this->record->Problem ?? 'No problem description provided.', // Ambil dari kolom Problem
+            ]);
+
+            // Notifikasi sukses
+            Notification::make()
+                ->title('Ticket Created Successfully')
+                ->icon('heroicon-o-credit-card')
+                ->body('A new ticket has been created with ID: ' . $this->record->No_Ticket)
+                ->success()
+                ->send();
+        } catch (\Exception $e) {
+            // Notifikasi jika ada error
+            Notification::make()
+                ->danger()
+                ->title('Error Creating Initial Progress')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 }

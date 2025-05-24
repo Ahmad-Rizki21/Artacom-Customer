@@ -21,6 +21,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -31,6 +32,7 @@ use Filament\Forms\Components\Fieldset;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Support\Enums\FontWeight;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
@@ -48,9 +50,7 @@ class TicketResource extends Resource
 
     public static function form(Form $form): Form
     {
-        // Shared schema for both create and edit modes
         $mainSchema = fn (string $operation) => [
-            // Main Information Section
             Section::make()
                 ->schema([
                     Grid::make(2)
@@ -71,7 +71,7 @@ class TicketResource extends Resource
                                 ->label('Open Level')
                                 ->options([
                                     'Level 1' => 'Level 1 - Low',
-                                    'Level 2' => 'Level 2 - Medium', 
+                                    'Level 2' => 'Level 2 - Medium',
                                     'Level 3' => 'Level 3 - High',
                                 ])
                                 ->required()
@@ -123,15 +123,15 @@ class TicketResource extends Resource
                                     if ($state) {
                                         $remote = TableRemote::where('Site_ID', $state)->first();
                                         if ($remote) {
-                                            $set('pic', $remote->PIC ?? '-');
-                                            $set('tlp_pic', $remote->tlp_pic ?? '-');
+                                            $set('Pic', $remote->PIC ?? '-');
+                                            $set('Tlp_Pic', $remote->Tlp_Pic ?? '-');
                                         } else {
-                                            $set('pic', '-');
-                                            $set('tlp_pic', '-');
+                                            $set('Pic', '-');
+                                            $set('Tlp_Pic', '-');
                                         }
                                     } else {
-                                        $set('pic', '-');
-                                        $set('tlp_pic', '-');
+                                        $set('Pic', '-');
+                                        $set('Tlp_Pic', '-');
                                     }
                                 })
                                 ->prefixIcon('heroicon-m-computer-desktop')
@@ -172,7 +172,7 @@ class TicketResource extends Resource
                                         $set('Closed_Time', $record?->Closed_Time ?? now());
                                     } elseif ($state === 'OPEN') {
                                         $set('Closed_Time', null);
-                                        $set('Action_Summry', null);
+                                        // Jangan hapus Action_Summry agar bisa diedit
                                     }
                                 })
                                 ->disabled(fn (?Model $record) => $record?->Status === 'CLOSED')
@@ -195,7 +195,6 @@ class TicketResource extends Resource
                 ])
                 ->id('basic-info'),
 
-            // Problem Details Section
             Section::make('Problem Details')
                 ->schema([
                     Textarea::make('Problem')
@@ -224,7 +223,7 @@ class TicketResource extends Resource
                                 ])
                                 ->columnSpan(1),
 
-                            TextInput::make('pic')
+                            TextInput::make('Pic')
                                 ->label('PIC Name')
                                 ->placeholder('Enter the name of the person in charge')
                                 ->maxLength(100)
@@ -235,7 +234,7 @@ class TicketResource extends Resource
                                 ])
                                 ->columnSpan(1),
 
-                            TextInput::make('tlp_pic')
+                            TextInput::make('Tlp_Pic')
                                 ->label('PIC Phone')
                                 ->placeholder('+62 xxx-xxxx-xxxx')
                                 ->maxLength(20)
@@ -247,7 +246,7 @@ class TicketResource extends Resource
                                 ->columnSpan(1),
 
                             Textarea::make('Problem_Summary')
-                                ->label('Internal Summary')
+                                ->label('Problem Summary')
                                 ->rows(3)
                                 ->placeholder('Enter internal analysis of the problem...')
                                 ->helperText('For internal use - technical summary of the issue')
@@ -267,45 +266,41 @@ class TicketResource extends Resource
                 ])
                 ->id('problem-details'),
 
-            // Status Management Section (Edit Mode)
             Section::make('Status Management')
                 ->schema([
-                    Group::make([
-                        Textarea::make('Action_Summry')
-                            ->label('Resolution Summary')
-                            ->required()
-                            ->rows(5)
-                            ->placeholder('Detail the steps taken to resolve the issue...')
-                            ->helperText('Provide comprehensive details of the resolution')
-                            ->extraAttributes([
-                                'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
-                            ])
-                            ->columnSpanFull(),
+                    Textarea::make('Action_Summry')
+                        ->label('Action Summry Summary')
+                        ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
+                        ->rows(5)
+                        ->placeholder('Detail the steps taken to resolve the issue...')
+                        ->helperText('Provide comprehensive details of the resolution (required when closing the ticket)')
+                        ->extraAttributes([
+                            'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
+                        ])
+                        ->columnSpanFull(),
 
-                        Grid::make(2)
-                            ->schema([
-                                Placeholder::make('Closed_Time')
-                                    ->label('Closed At')
-                                    ->content(fn (?Model $record): string => 
-                                        $record?->Closed_Time 
-                                            ? Carbon::parse($record->Closed_Time)->format('d/m/Y H:i:s') 
-                                            : 'Will be set automatically'
-                                    )
-                                    ->extraAttributes([
-                                        'class' => 'text-gray-600',
-                                    ]),
+                    Grid::make(2)
+                        ->schema([
+                            Placeholder::make('Closed_Time')
+                                ->label('Closed At')
+                                ->content(fn (?Model $record): string => 
+                                    $record?->Closed_Time 
+                                        ? Carbon::parse($record->Closed_Time)->format('d/m/Y H:i:s') 
+                                        : 'Will be set automatically'
+                                )
+                                ->extraAttributes([
+                                    'class' => 'text-gray-600',
+                                ]),
 
-                                Placeholder::make('closedBy.name')
-                                    ->label('Closed By')
-                                    ->content(fn (?Model $record): string => 
-                                        $record?->closedBy?->name ?? Auth::user()?->name ?? 'Current User'
-                                    )
-                                    ->extraAttributes([
-                                        'class' => 'text-gray-600',
-                                    ]),
-                            ]),
-                    ])
-                    ->visible(fn (Forms\Get $get) => $get('Status') === 'CLOSED'),
+                            Placeholder::make('closedBy.name')
+                                ->label('Closed By')
+                                ->content(fn (?Model $record): string => 
+                                    $record?->closedBy?->name ?? Auth::user()?->name ?? 'Current User'
+                                )
+                                ->extraAttributes([
+                                    'class' => 'text-gray-600',
+                                ]),
+                        ]),
                 ])
                 ->description('Manage ticket status and resolution details')
                 ->icon('heroicon-m-clock')
@@ -317,7 +312,6 @@ class TicketResource extends Resource
                 ->id('status-management')
                 ->visible(fn () => $operation === 'edit'),
 
-            // Ticket Timeline Section (Edit Mode)
             Section::make('Ticket Timeline')
                 ->schema([
                     Grid::make(3)
@@ -349,7 +343,7 @@ class TicketResource extends Resource
                                         return '-';
                                     }
                                     $start = Carbon::parse($record->Open_Time);
-                                    $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
+                                    $end = $record?->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
                                     return $start->diffForHumans($end, true);
                                 })
                                 ->extraAttributes([
@@ -369,7 +363,6 @@ class TicketResource extends Resource
                 ->visible(fn () => $operation === 'edit'),
         ];
 
-        // Sidebar schema for edit mode
         $sidebarSchema = [
             Section::make('Quick Actions')
                 ->schema([
@@ -393,15 +386,6 @@ class TicketResource extends Resource
                             ])
                             ->visible(fn (?Model $record) => (bool) $record),
 
-                        Action::make('contactPIC')
-                            ->label('Contact PIC')
-                            ->icon('heroicon-m-phone')
-                            ->color('success')
-                            ->action(fn (?Model $record) => null) // Add contact logic
-                            ->extraAttributes([
-                                'class' => 'w-full bg-success-600 hover:bg-success-700 text-white font-medium py-2 px-4 rounded-lg transition-colors mt-2',
-                            ])
-                            ->visible(fn (?Model $record) => (bool) $record?->tlp_pic),
                     ])
                     ->fullWidth(),
                 ])
@@ -470,19 +454,19 @@ class TicketResource extends Resource
                     ->copyable()
                     ->weight(FontWeight::Bold)
                     ->color('primary'),
-                    
+                
                 TextColumn::make('Customer')
                     ->searchable()
                     ->sortable()
                     ->badge()
                     ->color('gray'),
-                    
+                
                 TextColumn::make('Site_ID')
                     ->label('Site')
                     ->searchable()
                     ->sortable()
                     ->limit(30),
-                    
+                
                 TextColumn::make('Problem')
                     ->label('Problem')
                     ->searchable()
@@ -495,30 +479,31 @@ class TicketResource extends Resource
                         }
                         return $state;
                     }),
-                    
+                
                 TextColumn::make('Reported_By')
                     ->label('Reported By')
                     ->searchable()
                     ->placeholder('-'),
-                    
+                
                 TextColumn::make('Pic')
                     ->label('PIC')
                     ->searchable()
                     ->placeholder('-'),
-                    
+                
                 TextColumn::make('Tlp_Pic')
                     ->label('PIC Phone')
                     ->searchable()
                     ->placeholder('-'),
-                    
+                
                 TextColumn::make('Status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'OPEN' => 'warning',
+                        'PENDING' => 'info',
                         'CLOSED' => 'success',
                         default => 'gray',
                     }),
-                    
+                
                 TextColumn::make('Open_Level')
                     ->label('Open Level')
                     ->badge()
@@ -528,56 +513,82 @@ class TicketResource extends Resource
                         'Level 1' => 'success',
                         default => 'gray',
                     }),
-                    
+                
                 TextColumn::make('Open_Time')
                     ->label('Created')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->since()
                     ->description(fn ($record): string => 
-                        $record->Open_Time ? Carbon::parse($record->Open_Time)->format('d/m/Y') : ''
+                        $record?->Open_Time ? Carbon::parse($record->Open_Time)->format('d/m/Y') : ''
                     ),
-                    
+                
                 TextColumn::make('openedBy.name')
                     ->label('Opened By')
                     ->searchable()
                     ->placeholder('Unknown'),
-                    
+                
                 TextColumn::make('Closed_Time')
                     ->label('Closed')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->since()
                     ->description(fn ($record): string => 
-                        $record->Closed_Time ? Carbon::parse($record->Closed_Time)->format('d/m/Y') : ''
+                        $record?->Closed_Time ? Carbon::parse($record->Closed_Time)->format('d/m/Y') : ''
                     )
                     ->toggleable(isToggledHiddenByDefault: true),
-                    
+                
                 TextColumn::make('closedBy.name')
                     ->label('Closed By')
                     ->searchable()
                     ->placeholder('Not closed')
                     ->toggleable(isToggledHiddenByDefault: true),
-                    
-                TextColumn::make('ticket_duration')
-                    ->label('Duration')
-                    ->getStateUsing(function ($record) {
-                        if (!$record->Open_Time) {
-                            return '-';
+            
+                
+                ToggleColumn::make('is_closed')
+                    ->label('Close')
+                    ->onIcon('heroicon-m-check-circle')
+                    ->offIcon('heroicon-m-x-circle')
+                    ->onColor('success')
+                    ->offColor('danger')
+                    ->getStateUsing(fn ($record) => $record?->Status === 'CLOSED')
+                    ->updateStateUsing(function ($record, $state) {
+                        try {
+                            $newStatus = $state ? 'CLOSED' : 'OPEN';
+                            $actionDescription = $state 
+                                ? 'Ticket closed via toggle at ' . now()->format('d/m/Y H:i')
+                                : 'Ticket reopened via toggle at ' . now()->format('d/m/Y H:i');
+
+                            $record->update([
+                                'Status' => $newStatus,
+                                'Closed_Time' => $state ? now() : null,
+                                'Closed_By' => $state ? Auth::id() : null,
+                                'Action_Summry' => $state ? $actionDescription : null,
+                            ]);
+
+                            \App\Models\AlfaLawson\TicketAction::create([
+                                'No_Ticket' => $record->No_Ticket,
+                                'Action_Taken' => $state ? 'Closed' : 'Start Clock',
+                                'Action_Time' => now(),
+                                'Action_By' => Auth::user()->name,
+                                'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                                'Action_Description' => $actionDescription,
+                            ]);
+
+                            Notification::make()
+                                ->success()
+                                ->title('Status Updated')
+                                ->body('The ticket status has been updated successfully.')
+                                ->send();
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Error Updating Status')
+                                ->body($e->getMessage())
+                                ->send();
                         }
-                        $start = Carbon::parse($record->Open_Time);
-                        $end = $record->Closed_Time ? Carbon::parse($record->Closed_Time) : now();
-                        $diffInSeconds = $start->diffInSeconds($end);
-                        return sprintf(
-                            '%02d:%02d:%02d',
-                            floor($diffInSeconds / 3600),
-                            floor(($diffInSeconds % 3600) / 60),
-                            $diffInSeconds % 60
-                        );
                     })
-                    ->sortable(query: fn (Builder $query, string $direction) => 
-                        $query->orderByRaw("TIMESTAMPDIFF(SECOND, Open_Time, COALESCE(Closed_Time, NOW())) {$direction}")
-                    ),
+                    ->visible(fn ($record) => $record && ($record->Status !== 'CLOSED' || Auth::user()->can('reopen_ticket', $record))),
             ])
             ->defaultSort('Open_Time', 'desc')
             ->filters([
@@ -589,7 +600,6 @@ class TicketResource extends Resource
                     ])
                     ->multiple(),
 
-                // Add Date Range Filter (Dari Tanggal & Sampai Tanggal)
                 Filter::make('periode')
                     ->form([
                         Grid::make(2)
@@ -601,7 +611,7 @@ class TicketResource extends Resource
                                     ->closeOnDateSelection()
                                     ->maxDate(now())
                                     ->placeholder('Pilih Tanggal'),
-                                    
+                                
                                 Forms\Components\DatePicker::make('end_date')
                                     ->label('Sampai Tanggal')
                                     ->displayFormat('d M Y')
@@ -634,8 +644,6 @@ class TicketResource extends Resource
                         return $indicators;
                     }),
 
-                // Add Problem Type Filter
-                
                 SelectFilter::make('Catagory')
                     ->options([
                         'Internal' => 'Internal',
@@ -649,35 +657,6 @@ class TicketResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-                
-                Tables\Actions\Action::make('closeTicket')
-                    ->label('Close')
-                    ->icon('heroicon-m-check-circle')
-                    ->color('success')
-                    ->visible(fn ($record) => $record->Status !== 'CLOSED')
-                    ->form([
-                        Textarea::make('action_summary')
-                            ->label('Resolution Summary')
-                            ->required()
-                            ->rows(4)
-                            ->placeholder('Describe how the issue was resolved...')
-                            ->helperText('Provide detailed resolution steps')
-                            ->extraAttributes([
-                                'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg resize-none',
-                            ]),
-                    ])
-                    ->action(function ($record, array $data) {
-                        $record->update([
-                            'Status' => 'CLOSED',
-                            'Action_Summry' => $data['action_summary'],
-                            'Closed_Time' => now(),
-                            'Closed_By' => Auth::id(),
-                        ]);
-                    })
-                    ->modalHeading('Close Ticket')
-                    ->modalDescription('Mark this ticket as resolved')
-                    ->modalSubmitActionLabel('Close Ticket')
-                    ->modalWidth('lg'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

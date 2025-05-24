@@ -45,7 +45,8 @@ class Ticket extends Model
         'Pending_Reason',
         'Problem_Summary',
         'Classification',
-        'Action_Summry'
+        'Action_Summry',
+        'pending_duration_seconds',
     ];
 
     protected $casts = [
@@ -57,71 +58,147 @@ class Ticket extends Model
         'updated_at' => 'datetime',
     ];
 
-    protected static function boot()
+    public static function boot()
     {
         parent::boot();
-
-        static::created(function ($model) {
-            // Automatically create an "Open" action when ticket is created
-            TicketAction::create([
-                'No_Ticket' => $model->No_Ticket,
-                'Action_Taken' => 'Start Clock',
-                'Action_Time' => $model->Open_Time,
-                'Action_By' => $model->openedBy->name ?? Auth::user()->name,
-                'Action_Level' => $model->Open_Level, // Use the ticket's Open_Level
-                'Action_Description' => $model->Problem
-            ]);
-        });
-
-        static::creating(function ($model) {
-            if (!$model->No_Ticket) {
-                $model->No_Ticket = static::generateTicketNumber();
-            }
-
-            $model->Status = static::STATUS_OPEN;
-            $model->Open_By = Auth::id();
-            $model->Open_Time = now();
-            // Removed: $model->Reported_By = $model->Reported_By ?: Auth::id();
-            
-            // Set Open_Level from the user's Level
-            $model->Open_Level = Auth::user()->Level ?? 'Level 1';
-
-            Log::info("New ticket created: {$model->No_Ticket} by " . Auth::user()->name);
-        });
 
         static::updating(function ($model) {
             if ($model->isDirty('Status')) {
                 $oldStatus = $model->getOriginal('Status');
                 $newStatus = $model->Status;
 
+                Log::info('Ticket status changing', [
+                    'ticket' => $model->No_Ticket,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'current_pending_duration' => $model->pending_duration_seconds ?? 0,
+                    'pending_start' => $model->Pending_Start?->toDateTimeString(),
+                    'pending_stop' => $model->Pending_Stop?->toDateTimeString(),
+                ]);
+
                 switch ($newStatus) {
-                    case static::STATUS_PENDING:
-                        $model->Pending_Start = now();
-                        $model->Pending_Stop = null;
+                    case self::STATUS_PENDING:
+                        // Validasi alasan pending
                         if (empty(trim($model->Pending_Reason))) {
                             throw new \Exception('Mohon isi alasan pending ticket terlebih dahulu');
                         }
+
+                        // Hitung durasi pending sebelumnya jika ada periode pending yang sudah selesai
+                        if ($oldStatus === self::STATUS_OPEN && 
+                            $model->Pending_Start && 
+                            $model->Pending_Stop) {
+                            
+                            $pendingStart = Carbon::parse($model->Pending_Start);
+                            $pendingStop = Carbon::parse($model->Pending_Stop);
+                            
+                            // Pastikan Pending_Stop lebih besar dari Pending_Start
+                            if ($pendingStop->gt($pendingStart)) {
+                                $additionalPendingSeconds = $pendingStop->timestamp - $pendingStart->timestamp;
+                                $currentDuration = $model->pending_duration_seconds ?? 0;
+                                $newDuration = max(0, $currentDuration + $additionalPendingSeconds);
+                                
+                                Log::debug('Adding previous pending duration', [
+                                    'ticket' => $model->No_Ticket,
+                                    'pending_start' => $pendingStart->toDateTimeString(),
+                                    'pending_stop' => $pendingStop->toDateTimeString(),
+                                    'additional_seconds' => $additionalPendingSeconds,
+                                    'current_duration' => $currentDuration,
+                                    'new_duration' => $newDuration,
+                                ]);
+                                
+                                $model->pending_duration_seconds = $newDuration;
+                            } else {
+                                Log::warning('Invalid pending period detected, skipping duration calculation', [
+                                    'ticket' => $model->No_Ticket,
+                                    'pending_start' => $pendingStart->toDateTimeString(),
+                                    'pending_stop' => $pendingStop->toDateTimeString(),
+                                ]);
+                            }
+                        }
+
+                        // Set periode pending baru
+                        $model->Pending_Start = now();
+                        $model->Pending_Stop = null;
                         break;
 
-                    case static::STATUS_CLOSED:
+                    case self::STATUS_CLOSED:
+                        // Validasi Action Summary
                         if (empty(trim($model->Action_Summry))) {
                             throw new \Exception('Mohon isi ringkasan tindakan (Action Summary) sebelum menutup ticket');
                         }
+
+                        // Set data penutupan
                         $model->Closed_Time = now();
                         $model->Closed_By = Auth::id();
-                        if ($oldStatus === static::STATUS_PENDING) {
-                            $model->Pending_Stop = now();
+
+                        // Jika sebelumnya pending, hitung durasi pending saat ini
+                        if ($oldStatus === self::STATUS_PENDING && $model->Pending_Start) {
+                            $pendingStart = Carbon::parse($model->Pending_Start);
+                            $now = now();
+                            $additionalPendingSeconds = $now->timestamp - $pendingStart->timestamp;
+                            $currentDuration = $model->pending_duration_seconds ?? 0;
+                            $newDuration = max(0, $currentDuration + $additionalPendingSeconds);
+                            
+                            Log::debug('Adding current pending duration on close', [
+                                'ticket' => $model->No_Ticket,
+                                'pending_start' => $pendingStart->toDateTimeString(),
+                                'now' => $now->toDateTimeString(),
+                                'additional_seconds' => $additionalPendingSeconds,
+                                'current_duration' => $currentDuration,
+                                'new_duration' => $newDuration,
+                            ]);
+                            
+                            $model->pending_duration_seconds = $newDuration;
+                            $model->Pending_Stop = $now;
                         }
                         break;
 
-                    case static::STATUS_OPEN:
-                        if ($oldStatus === static::STATUS_PENDING) {
-                            $model->Pending_Stop = now();
+                    case self::STATUS_OPEN:
+                        // Jika sebelumnya pending, hitung durasi pending saat ini
+                        if ($oldStatus === self::STATUS_PENDING && $model->Pending_Start) {
+                            $pendingStart = Carbon::parse($model->Pending_Start);
+                            $now = now();
+                            $additionalPendingSeconds = $now->timestamp - $pendingStart->timestamp;
+                            $currentDuration = $model->pending_duration_seconds ?? 0;
+                            $newDuration = max(0, $currentDuration + $additionalPendingSeconds);
+                            
+                            Log::debug('Adding current pending duration on reopen', [
+                                'ticket' => $model->No_Ticket,
+                                'pending_start' => $pendingStart->toDateTimeString(),
+                                'now' => $now->toDateTimeString(),
+                                'additional_seconds' => $additionalPendingSeconds,
+                                'current_duration' => $currentDuration,
+                                'new_duration' => $newDuration,
+                            ]);
+                            
+                            $model->pending_duration_seconds = $newDuration;
+                            $model->Pending_Stop = $now;
                         }
                         break;
                 }
+
+                Log::info('Ticket status changed', [
+                    'ticket' => $model->No_Ticket,
+                    'final_status' => $newStatus,
+                    'final_pending_duration' => $model->pending_duration_seconds ?? 0,
+                    'pending_start' => $model->Pending_Start?->toDateTimeString(),
+                    'pending_stop' => $model->Pending_Stop?->toDateTimeString(),
+                ]);
             }
         });
+
+        // Tambahkan event untuk memastikan pending_duration_seconds tidak pernah negatif
+        static::saving(function ($model) {
+            if (isset($model->attributes['pending_duration_seconds'])) {
+                $model->attributes['pending_duration_seconds'] = max(0, (int) $model->attributes['pending_duration_seconds']);
+            }
+        });
+    }
+
+    // Helper method untuk set pending duration dengan validasi
+    private function setPendingDurationSeconds($seconds)
+    {
+        $this->attributes['pending_duration_seconds'] = max(0, (int) $seconds);
     }
 
     // Duration calculations
@@ -135,25 +212,20 @@ class Ticket extends Model
         if ($this->Status === 'CLOSED' && $this->Closed_Time) {
             $end = Carbon::parse($this->Closed_Time)->timestamp;
             $duration = $end - $start;
-
-            if ($this->Pending_Start && $this->Pending_Stop) {
-                $pendingDuration = Carbon::parse($this->Pending_Stop)->timestamp - Carbon::parse($this->Pending_Start)->timestamp;
-                $duration -= $pendingDuration;
-            }
+            $duration -= $this->pending_duration_seconds ?? 0;
             return max(0, $duration);
         }
 
         if ($this->Status === 'PENDING' && $this->Pending_Start) {
             $end = Carbon::parse($this->Pending_Start)->timestamp;
-            return max(0, $end - $start);
+            $duration = $end - $start;
+            $duration -= ($this->pending_duration_seconds ?? 0);
+            return max(0, $duration);
         }
 
         if ($this->Status === 'OPEN') {
             $duration = $now - $start;
-            if ($this->Pending_Start && $this->Pending_Stop) {
-                $pendingDuration = Carbon::parse($this->Pending_Stop)->timestamp - Carbon::parse($this->Pending_Start)->timestamp;
-                $duration -= $pendingDuration;
-            }
+            $duration -= ($this->pending_duration_seconds ?? 0);
             return max(0, $duration);
         }
 
@@ -162,21 +234,7 @@ class Ticket extends Model
 
     public function getPendingDurationAttribute()
     {
-        if (!$this->Pending_Start) return 0;
-
-        $start = Carbon::parse($this->Pending_Start)->timestamp;
-        $now = Carbon::now()->timestamp;
-
-        if ($this->Pending_Stop) {
-            $end = Carbon::parse($this->Pending_Stop)->timestamp;
-            return max(0, $end - $start);
-        }
-
-        if ($this->Status === 'PENDING') {
-            return max(0, $now - $start);
-        }
-
-        return 0;
+        return max(0, $this->pending_duration_seconds ?? 0);
     }
 
     public function getCurrentTimer()
@@ -189,30 +247,36 @@ class Ticket extends Model
             $openStart = $this->Open_Time->getTimestamp();
 
             if ($this->Status === 'CLOSED' && $this->Closed_Time) {
-                // Hitung durasi open hingga Closed_Time
                 $openSeconds = $this->Closed_Time->getTimestamp() - $openStart;
             } else {
-                // Hitung durasi open hingga sekarang
                 $openSeconds = $now - $openStart;
             }
 
-            if ($this->Pending_Start) {
-                $pendingStart = $this->Pending_Start->getTimestamp();
-                if ($this->Pending_Stop) {
-                    // Jika Pending_Stop ada, hitung durasi pending hingga Pending_Stop
-                    $pendingSeconds = $this->Pending_Stop->getTimestamp() - $pendingStart;
-                    if ($this->Status !== 'PENDING') {
-                        // Kurangi durasi pending dari durasi open
-                        $openSeconds -= $pendingSeconds;
-                    }
-                } elseif ($this->Status === 'PENDING') {
-                    // Jika masih PENDING, hitung durasi pending hingga sekarang
-                    $pendingSeconds = $now - $pendingStart;
-                }
+            // Ambil akumulasi pending dari database
+            $pendingSeconds = max(0, $this->pending_duration_seconds ?? 0);
+
+            // Jika sedang pending, tambahkan durasi pending saat ini
+            if ($this->Status === 'PENDING' && $this->Pending_Start) {
+                $currentPendingSeconds = $now - $this->Pending_Start->getTimestamp();
+                $pendingSeconds += max(0, $currentPendingSeconds);
             }
+
+            // Kurangi total pending dari open seconds
+            $openSeconds = max(0, $openSeconds - ($this->pending_duration_seconds ?? 0));
         }
 
         $totalSeconds = $openSeconds + $pendingSeconds;
+
+        Log::debug('getCurrentTimer result', [
+            'ticket' => $this->No_Ticket,
+            'openSeconds' => $openSeconds,
+            'pendingSeconds' => $pendingSeconds,
+            'totalSeconds' => $totalSeconds,
+            'status' => $this->Status,
+            'pending_duration_seconds' => $this->pending_duration_seconds ?? 0,
+            'Pending_Start' => $this->Pending_Start?->timestamp,
+            'now' => $now,
+        ]);
 
         return [
             'open' => ['seconds' => max(0, $openSeconds)],
@@ -280,7 +344,7 @@ class Ticket extends Model
         $action->update([
             'Action_Taken' => $newActionTaken,
             'Action_Description' => $data['action_description'],
-            'Action_Time' => now(), // Update waktu aksi
+            'Action_Time' => now(),
             'Action_By' => Auth::user()->name,
             'Action_Level' => Auth::user()->Level ?? 'Level 1',
         ]);
@@ -291,15 +355,12 @@ class Ticket extends Model
                 case 'Pending Clock':
                     $this->Status = self::STATUS_PENDING;
                     $this->Pending_Reason = $data['action_description'];
-                    $this->Pending_Start = now();
-                    $this->Pending_Stop = null;
+                    // Pending_Start dan validasi akan ditangani oleh boot() method
                     break;
 
                 case 'Start Clock':
                     $this->Status = self::STATUS_OPEN;
-                    if ($oldActionTaken === 'Pending Clock') {
-                        $this->Pending_Stop = now();
-                    }
+                    // Pending_Stop dan perhitungan durasi akan ditangani oleh boot() method
                     break;
 
                 case 'Closed':
@@ -308,12 +369,7 @@ class Ticket extends Model
                     }
                     $this->Status = self::STATUS_CLOSED;
                     $this->Action_Summry = $data['action_description'];
-                    $this->Closed_Time = now();
-                    $this->Closed_By = Auth::id();
-                    $this->Closed_Level = Auth::user()->Level ?? 'Level 1';
-                    if ($oldActionTaken === 'Pending Clock') {
-                        $this->Pending_Stop = now();
-                    }
+                    // Closed_Time, Closed_By, dan perhitungan durasi akan ditangani oleh boot() method
                     break;
 
                 case 'Note':

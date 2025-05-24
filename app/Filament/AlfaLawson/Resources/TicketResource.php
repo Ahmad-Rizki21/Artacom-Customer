@@ -69,13 +69,13 @@ class TicketResource extends Resource
 
                             Select::make('Open_Level')
                                 ->label('Open Level')
-                                ->options([
-                                    'Level 1' => 'Level 1 - Low',
-                                    'Level 2' => 'Level 2 - Medium',
-                                    'Level 3' => 'Level 3 - High',
-                                ])
+                                ->options(function () {
+                                    $userLevel = Auth::user()->Level ?? 'Level 1';
+                                    return [$userLevel => $userLevel];
+                                })
                                 ->required()
-                                ->default('Level 1')
+                                ->default(fn () => Auth::user()->Level ?? 'Level 1')
+                                ->disabled()
                                 ->prefixIcon('heroicon-m-exclamation-triangle')
                                 ->native(false)
                                 ->extraAttributes([
@@ -172,7 +172,6 @@ class TicketResource extends Resource
                                         $set('Closed_Time', $record?->Closed_Time ?? now());
                                     } elseif ($state === 'OPEN') {
                                         $set('Closed_Time', null);
-                                        // Jangan hapus Action_Summry agar bisa diedit
                                     }
                                 })
                                 ->disabled(fn (?Model $record) => $record?->Status === 'CLOSED')

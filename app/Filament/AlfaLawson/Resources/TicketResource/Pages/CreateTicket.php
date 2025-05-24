@@ -17,7 +17,7 @@ class CreateTicket extends CreateRecord
         $data['Status'] = 'OPEN';
         $data['Open_By'] = Auth::id();
         $data['Open_Time'] = now();
-        $data['Open_Level'] = 'Level 1'; // Default level
+        $data['Open_Level'] = Auth::user()->Level ?? 'Level 1'; // Ambil dari level user
         
         return $data;
     }

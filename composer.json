@@ -9,6 +9,8 @@
         "php": "^8.2",
         "afsakar/filament-leaflet-map-picker": "^1.2",
         "arbermustafa/filament-locationpickr-field": "2.0.0",
+        "barryvdh/laravel-dompdf": "^3.1",
+        "barryvdh/laravel-snappy": "^1.0",
         "bezhansalleh/filament-shield": "^3.3",
         "blade-ui-kit/blade-heroicons": "^2.6",
         "cheesegrits/filament-google-maps": "^3.0",
@@ -34,6 +36,7 @@
         "pxlrbt/filament-excel": "^2.4",
         "rmsramos/activitylog": "^1.0",
         "swisnl/filament-backgrounds": "^1.1",
+        "tecnickcom/tcpdf": "^6.9",
         "webbingbrasil/filament-maps": "^3.0",
         "z3d0x/filament-logger": "^0.8.0"
     },

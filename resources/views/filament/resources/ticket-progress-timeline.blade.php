@@ -1,12 +1,4 @@
-@php
-    $actions = isset($record) ? $record->actions()->orderBy('Action_Time', 'desc')->get() : collect([]);
-    $user = auth()->user();
-@endphp
-
 <div class="relative timeline-container">
-    <!-- Render Livewire Component -->
-    <livewire:edit-action-modal />
-
     @if ($actions->count() > 0)
         @foreach ($actions as $action)
             <div class="flex items-start mb-6 relative group">
@@ -17,7 +9,8 @@
                         'bg-info border-info' => $action->Action_Taken === 'Pending Clock',
                         'bg-primary border-primary' => $action->Action_Taken === 'Start Clock',
                         'bg-secondary border-secondary' => $action->Action_Taken === 'Note',
-                        'bg-gray-100 border-gray-300' => !in_array($action->Action_Taken, ['Completed', 'Closed', 'Pending Clock', 'Start Clock', 'Note'])
+                        'bg-warning border-warning' => $action->Action_Taken === 'Escalation',
+                        'bg-gray-100 border-gray-300' => !in_array($action->Action_Taken, ['Completed', 'Closed', 'Pending Clock', 'Start Clock', 'Note', 'Escalation'])
                     ])>
                         @switch($action->Action_Taken)
                             @case('Completed')
@@ -40,6 +33,11 @@
                             @case('Note')
                                 <svg class="w-4 h-4 text-secondary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                                @break
+                            @case('Escalation')
+                                <svg class="w-4 h-4 text-warning-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
                                 </svg>
                                 @break
                             @default
@@ -89,6 +87,14 @@
                                     Note {{ $action->Action_Time->format('d M Y H:i') }}
                                 </span>
                                 @break
+                            @case('Escalation')
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-warning text-warning-foreground">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Escalation {{ $action->Action_Time->format('d M Y H:i') }}
+                                </span>
+                                @break
                             @default
                                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100">
                                     <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -98,7 +104,7 @@
                                 </span>
                         @endswitch
 
-                        @if($user->name === $action->Action_By || $user->Level === 'Admin')
+                        @if(auth()->check() && (auth()->user()->name === $action->Action_By || auth()->user()->Level === 'Admin'))
                             <button 
                                 wire:click="$dispatch('openEditModal', { actionId: '{{ $action->id }}', ticketId: '{{ $record->No_Ticket }}' })"
                                 class="opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-500 hover:text-primary-500"
@@ -117,12 +123,21 @@
                         'bg-info-50 border-info-200 dark:bg-info-900/20 dark:border-info-700' => $action->Action_Taken === 'Pending Clock',
                         'bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-700' => $action->Action_Taken === 'Start Clock',
                         'bg-secondary-50 border-secondary-200 dark:bg-secondary-900/20 dark:border-secondary-700' => $action->Action_Taken === 'Note',
-                        'bg-card border-card' => !in_array($action->Action_Taken, ['Completed', 'Closed', 'Pending Clock', 'Start Clock', 'Note'])
+                        'bg-warning-50 border-warning-200 dark:bg-warning-900/20 dark:border-warning-700' => $action->Action_Taken === 'Escalation',
+                        'bg-card border-card' => !in_array($action->Action_Taken, ['Completed', 'Closed', 'Pending Clock', 'Start Clock', 'Note', 'Escalation'])
                     ])>
                         @php
                             $isCommandOutput = preg_match('/(\r\n|\n|\r|\t)/', $action->Action_Description) || 
                                 preg_match('/(C:\\\\|ping |\/home\/|reply from|ms TTL=|Pinging|PING|packets transmitted|received)/i', $action->Action_Description) ||
                                 preg_match('/(tracert|traceroute|nslookup|dig @|whois|netstat|\$ |# |> |C:\\>)/i', $action->Action_Description);
+
+                            // Extract escalation target level from Action_Description
+                            $escalationTarget = null;
+                            if ($action->Action_Taken === 'Escalation' && preg_match('/Escalated to: (.*)/', $action->Action_Description, $matches)) {
+                                $escalationTarget = $matches[1];
+                                // Remove the "Escalated to: ..." part from the description for display
+                                $action->Action_Description = trim(str_replace($matches[0], '', $action->Action_Description));
+                            }
                         @endphp
 
                         @if($isCommandOutput)
@@ -147,13 +162,18 @@
                                 <span>{{ $action->Action_By }}</span>
                                 @if($action->Action_Level)
                                     <span class="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-                                        {{ $action->Action_Level }}
+                                        {{ $levelMapping[$action->Action_Level] ?? $action->Action_Level }}
+                                    </span>
+                                @endif
+                                @if($action->Action_Taken === 'Escalation' && $escalationTarget)
+                                    <span class="text-xs bg-yellow-100 px-2 py-1 rounded-full text-yellow-800 dark:bg-yellow-700 dark:text-yellow-200">
+                                        To: {{ $escalationTarget }}
                                     </span>
                                 @endif
                             </div>
                             <div class="flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
                                 </svg>
                                 <span>{{ $action->Action_Time->format('d M Y H:i') }}</span>
                             </div>
@@ -166,7 +186,7 @@
         <div class="flex items-center justify-center p-6 text-gray-500 bg-white rounded-lg border-2 border-dashed dark:bg-gray-800 dark:text-gray-400">
             <div class="text-center">
                 <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    <path stroke-linecap="round" stroke-join="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                 </svg>
                 <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No progress recorded</h3>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating a new action.</p>
@@ -174,14 +194,3 @@
         </div>
     @endif
 </div>
-
-@push('scripts')
-    <script>
-        document.addEventListener('livewire:initialized', () => {
-            Livewire.on('actionUpdated', () => {
-                console.log('Action updated, refreshing UI');
-                location.reload(); // Refresh halaman untuk melihat perubahan
-            });
-        });
-    </script>
-@endpush

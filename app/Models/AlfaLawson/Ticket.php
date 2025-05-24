@@ -31,8 +31,8 @@ class Ticket extends Model
         'Site_ID',
         'Problem',
         'Reported_By',
-        'pic',
-        'tlp_pic',
+        'Pic',
+        'Tlp_Pic',
         'Status',
         'Open_By',
         'Open_Level',
@@ -47,6 +47,7 @@ class Ticket extends Model
         'Classification',
         'Action_Summry',
         'pending_duration_seconds',
+        'Current_Escalation_Level',
     ];
 
     protected $casts = [
@@ -320,6 +321,8 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'Closed_By', 'id');
     }
 
+    
+
     public function actions()
     {
         return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
@@ -327,70 +330,78 @@ class Ticket extends Model
 
     // Method to update an action (for EditActionModal)
     public function updateAction($actionId, array $data)
-    {
-        // Validasi data yang masuk
-        if (!isset($data['action_taken']) || !isset($data['action_description'])) {
-            throw new \Exception('Action Taken dan Action Description harus diisi.');
-        }
-
-        // Cari action berdasarkan ID
-        $action = $this->actions()->findOrFail($actionId);
-
-        // Simpan nilai sebelumnya untuk perbandingan
-        $oldActionTaken = $action->Action_Taken;
-        $newActionTaken = $data['action_taken'];
-
-        // Update data action
-        $action->update([
-            'Action_Taken' => $newActionTaken,
-            'Action_Description' => $data['action_description'],
-            'Action_Time' => now(),
-            'Action_By' => Auth::user()->name,
-            'Action_Level' => Auth::user()->Level ?? 'Level 1',
-        ]);
-
-        // Jika Action_Taken berubah, perbarui status ticket sesuai logika
-        if ($oldActionTaken !== $newActionTaken) {
-            switch ($newActionTaken) {
-                case 'Pending Clock':
-                    $this->Status = self::STATUS_PENDING;
-                    $this->Pending_Reason = $data['action_description'];
-                    // Pending_Start dan validasi akan ditangani oleh boot() method
-                    break;
-
-                case 'Start Clock':
-                    $this->Status = self::STATUS_OPEN;
-                    // Pending_Stop dan perhitungan durasi akan ditangani oleh boot() method
-                    break;
-
-                case 'Closed':
-                    if (empty(trim($data['action_description']))) {
-                        throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
-                    }
-                    $this->Status = self::STATUS_CLOSED;
-                    $this->Action_Summry = $data['action_description'];
-                    // Closed_Time, Closed_By, dan perhitungan durasi akan ditangani oleh boot() method
-                    break;
-
-                case 'Note':
-                    // Tidak perlu ubah status ticket untuk Note
-                    break;
-
-                default:
-                    throw new \Exception('Action Taken tidak valid: ' . $newActionTaken);
-            }
-
-            // Simpan perubahan status ticket
-            $this->save();
-        }
-
-        Log::info("Action updated for ticket: {$this->No_Ticket}, Action ID: {$actionId}", [
-            'Action_Taken' => $newActionTaken,
-            'Action_Description' => $data['action_description'],
-        ]);
-
-        return $action;
+{
+    if (!isset($data['action_taken']) || !isset($data['action_description'])) {
+        throw new \Exception('Action Taken dan Action Description harus diisi.');
     }
+
+    $action = $this->actions()->findOrFail($actionId);
+    $oldActionTaken = $action->Action_Taken;
+    $newActionTaken = $data['action_taken'];
+
+    // Simpan level user yang melakukan aksi
+    $userLevel = Auth::user()->Level ?? 'Level 1';
+
+    // Jika ini adalah aksi eskalsi, ambil level tujuan dari data (misalnya)
+    $escalationTargetLevel = null;
+    if ($newActionTaken === 'Escalation' && isset($data['escalation_level'])) {
+        $escalationTargetLevel = $data['escalation_level']; // Level tujuan eskalsi
+    }
+
+    // Update data action
+    $action->update([
+        'Action_Taken' => $newActionTaken,
+        'Action_Description' => $data['action_description'],
+        'Action_Time' => now(),
+        'Action_By' => Auth::user()->name,
+        'Action_Level' => $userLevel, // Selalu gunakan level user
+        'Escalation_Target_Level' => $escalationTargetLevel, // Simpan level tujuan jika ada
+    ]);
+
+    // Logika untuk memperbarui status ticket
+    if ($oldActionTaken !== $newActionTaken) {
+        switch ($newActionTaken) {
+            case 'Pending Clock':
+                $this->Status = self::STATUS_PENDING;
+                $this->Pending_Reason = $data['action_description'];
+                break;
+
+            case 'Start Clock':
+                $this->Status = self::STATUS_OPEN;
+                break;
+
+            case 'Closed':
+                if (empty(trim($data['action_description']))) {
+                    throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
+                }
+                $this->Status = self::STATUS_CLOSED;
+                $this->Action_Summry = $data['action_description'];
+                break;
+
+            case 'Note':
+                break;
+
+            case 'Escalation':
+                // Update Current_Escalation_Level pada ticket
+                if ($escalationTargetLevel) {
+                    $this->Current_Escalation_Level = $escalationTargetLevel;
+                }
+                break;
+
+            default:
+                throw new \Exception('Action Taken tidak valid: ' . $newActionTaken);
+        }
+
+        $this->save();
+    }
+
+    Log::info("Action updated for ticket: {$this->No_Ticket}, Action ID: {$actionId}", [
+        'Action_Taken' => $newActionTaken,
+        'Action_Description' => $data['action_description'],
+    ]);
+
+    return $action;
+}
 
     // Helpers
     public function isOpen(): bool { return $this->Status === self::STATUS_OPEN; }

@@ -17,6 +17,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use App\Filament\Components\TicketTimer;
 
+use Barryvdh\DomPDF\Facade\Pdf;
+
 class ViewTicket extends ViewRecord
 {
     protected static string $resource = TicketResource::class;
@@ -133,27 +135,70 @@ class ViewTicket extends ViewRecord
                         ->success()
                 ),
             Actions\Action::make('escalate')
-                ->label('Eskalasi')
-                ->icon('heroicon-o-arrow-up')
-                ->color('warning')
-                ->visible(fn () => !empty($escalationOptions)) // Hide button if no escalation options are available
-                ->form([
-                    Select::make('escalation_level')
-                        ->label('Escalation Level')
-                        ->options($escalationOptions)
-                        ->required()
-                        ->prefixIcon('heroicon-m-exclamation-triangle')
-                        ->native(false)
-                        ->extraAttributes([
-                            'class' => 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 rounded-lg',
-                        ]),
-                    Textarea::make('escalation_description')
-                        ->label('Description')
-                        ->required()
-                        ->rows(3),
-                ])
-                ->action(fn (array $data) => $this->escalateTicket($data))
-                ->modalSubmitActionLabel('Submit Escalation'),
+    ->label('Eskalasi')
+    ->icon('heroicon-o-arrow-up')
+    ->color('warning')
+    ->visible(function () {
+        $levelOrder = [
+            'Level 1' => ['order' => 1, 'role' => 'NOC'],
+            'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
+            'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
+            'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
+            'Level 5' => ['order' => 5, 'role' => 'Engineer'],
+            'Level 6' => ['order' => 6, 'role' => 'Management'],
+        ];
+        
+        $currentUserLevel = Auth::user()->Level ?? 'Level 1';
+        $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
+        
+        foreach ($levelOrder as $level => $info) {
+            if ($info['order'] > max(
+                $levelOrder[$currentUserLevel]['order'] ?? 1,
+                $levelOrder[$currentEscalationLevel]['order'] ?? 1
+            )) {
+                return true;
+            }
+        }
+        return false;
+    })
+    ->form([
+        Select::make('escalation_level')
+            ->label('Escalation Level')
+            ->options(function () {
+                $levelOrder = [
+                    'Level 1' => ['order' => 1, 'role' => 'NOC'],
+                    'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
+                    'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
+                    'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
+                    'Level 5' => ['order' => 5, 'role' => 'Engineer'],
+                    'Level 6' => ['order' => 6, 'role' => 'Management'],
+                ];
+                
+                $currentUserLevel = Auth::user()->Level ?? 'Level 1';
+                $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
+                
+                $options = [];
+                foreach ($levelOrder as $level => $info) {
+                    if ($info['order'] > max(
+                        $levelOrder[$currentUserLevel]['order'] ?? 1,
+                        $levelOrder[$currentEscalationLevel]['order'] ?? 1
+                    )) {
+                        $options[$level] = $info['role'];
+                    }
+                }
+                return $options;
+            })
+            ->required()
+            ->native(false),
+        Textarea::make('escalation_description')
+            ->label('Escalation Description')
+            ->required()
+            ->rows(3),
+    ])
+    ->action(function (array $data) {
+        $this->escalateTicket($data);
+    })
+    ->modalSubmitActionLabel('Submit Escalation'),
             Actions\Action::make('addAction')
                 ->label('Add Action')
                 ->icon('heroicon-o-plus-circle')
@@ -175,87 +220,81 @@ class ViewTicket extends ViewRecord
                 ->action(fn (array $data) => $this->addAction($data))
                 ->modalSubmitActionLabel('Submit')
                 ->extraAttributes(['wire:submit.prevent' => 'addAction']),
+            Actions\Action::make('downloadPdf')
+            ->label('Download PDF')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function () {
+                $actions = $this->record->actions()->orderBy('Action_Time', 'asc')->get();
+                $html = view('pdf.ticket-html', ['ticket' => $this->record, 'actions' => $actions])->render();
+                $pdf = Pdf::loadHTML($html);
+                return response()->streamDownload(function () use ($pdf) {
+                    echo $pdf->output();
+                }, 'ticket_' . $this->record->No_Ticket . '.pdf');
+            }),
+        
         ];
     }
 
     public function escalateTicket(array $data): void
-    {
-        try {
-            // Validate data
-            if (empty($data['escalation_level']) || empty($data['escalation_description'])) {
-                throw new \Exception('Escalation level and description are required.');
-            }
-
-            // Define the escalation levels and their order
-            $levelOrder = [
-                'Level 1' => ['order' => 1, 'role' => 'NOC'],
-                'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
-                'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
-                'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
-                'Level 5' => ['order' => 5, 'role' => 'Engineer'],
-                'Level 6' => ['order' => 6, 'role' => 'Management'],
-            ];
-
-            // Get the current user and ticket levels
-            $currentUserLevel = Auth::user()->Level ?? 'Level 1';
-            $currentTicketLevel = $this->record->Open_Level ?? 'Level 1';
-
-            // Get the latest escalation level from TicketAction history
-            $latestEscalation = $this->record->actions()
-                ->where('Action_Taken', 'Escalation')
-                ->orderBy('Action_Time', 'desc')
-                ->first();
-
-            $currentEscalationLevel = $latestEscalation ? $latestEscalation->Action_Level : $currentTicketLevel;
-
-            // Validate that the escalation level is higher than the current user and escalation levels
-            if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentUserLevel]['order'] ?? 1)) {
-                throw new \Exception('Cannot escalate to a level lower than or equal to your current level (' . $levelOrder[$currentUserLevel]['role'] . ').');
-            }
-
-            if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentEscalationLevel]['order'] ?? 1)) {
-                throw new \Exception('Cannot escalate to a level lower than or equal to the current escalation level (' . $levelOrder[$currentEscalationLevel]['role'] . ').');
-            }
-
-            // Update ticket status and Action_Summry (do not modify Open_Level as it represents the original level)
-            $this->record->update([
-                'Status' => 'OPEN',
-                'Action_Summry' => $data['escalation_description'],
-            ]);
-
-            // Add escalation action to history
-            TicketAction::create([
-                'No_Ticket' => $this->record->No_Ticket,
-                'Action_Taken' => 'Escalation',
-                'Action_Time' => now(),
-                'Action_By' => Auth::user()->name,
-                'Action_Level' => $data['escalation_level'],
-                'Action_Description' => $data['escalation_description'],
-            ]);
-
-            // Emit event to update UI
-            $this->dispatch('statusUpdated', $this->record->Status);
-            $this->dispatch('refresh');
-
-            // Send success notification
-            Notification::make()
-                ->success()
-                ->title('Ticket Escalated')
-                ->body('The ticket has been successfully escalated to ' . $levelOrder[$data['escalation_level']]['role'] . '.')
-                ->send();
-
-            // Redirect to refresh the page
-            $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
-        } catch (\Exception $e) {
-            // Send error notification
-            Notification::make()
-                ->danger()
-                ->title('Error Escalating Ticket')
-                ->body($e->getMessage())
-                ->send();
+{
+    try {
+        // Validate data is present (though Filament form should handle this)
+        if (empty($data['escalation_level']) || empty($data['escalation_description'])) {
+            throw new \Exception('Escalation level and description are required.');
         }
-    }
 
+        $levelOrder = [
+            'Level 1' => ['order' => 1, 'role' => 'NOC'],
+            'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
+            'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
+            'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
+            'Level 5' => ['order' => 5, 'role' => 'Engineer'],
+            'Level 6' => ['order' => 6, 'role' => 'Management'],
+        ];
+
+        $currentUserLevel = Auth::user()->Level ?? 'Level 1';
+        $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
+
+        // Validate the selected escalation level
+        if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentUserLevel]['order'] ?? 1)) {
+            throw new \Exception('Cannot escalate to a level lower than or equal to your current level.');
+        }
+
+        if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentEscalationLevel]['order'] ?? 1)) {
+            throw new \Exception('Cannot escalate to a level lower than or equal to the current escalation level.');
+        }
+
+        // Update ticket
+        $this->record->update([
+            'Current_Escalation_Level' => $data['escalation_level'],
+        ]);
+
+        // Create action history with the user's level, not the escalation level
+        TicketAction::create([
+            'No_Ticket' => $this->record->No_Ticket,
+            'Action_Taken' => 'Escalation',
+            'Action_Time' => now(),
+            'Action_By' => Auth::user()->name,
+            'Action_Level' => Auth::user()->Level ?? 'Level 1', // Gunakan level user yang melakukan aksi
+            'Action_Description' => $data['escalation_description'] . "\nEscalated to: " . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']),
+        ]);
+
+        Notification::make()
+            ->success()
+            ->title('Ticket Escalated')
+            ->body('Ticket has been escalated to ' . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']))
+            ->send();
+
+        $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
+    } catch (\Exception $e) {
+        Notification::make()
+            ->danger()
+            ->title('Escalation Failed')
+            ->body($e->getMessage())
+            ->send();
+    }
+}
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');
@@ -308,35 +347,33 @@ class ViewTicket extends ViewRecord
                                                 default => 'secondary',
                                             }),
                                         TextEntry::make('Open_Level')
-                                            ->label('Open Level')
-                                            ->getStateUsing(function ($record) {
-                                                $levelOrder = [
-                                                    'Level 1' => 'NOC',
-                                                    'Level 2' => 'SPV NOC',
-                                                    'Level 3' => 'Teknisi',
-                                                    'Level 4' => 'SPV Teknisi',
-                                                    'Level 5' => 'Engineer',
-                                                    'Level 6' => 'Management',
-                                                ];
-                                                return $levelOrder[$record->Open_Level] ?? $record->Open_Level;
-                                            }),
-                                        TextEntry::make('current_escalation_level')
-                                            ->label('Escalated to')
-                                            ->getStateUsing(function ($record) {
-                                                $levelOrder = [
-                                                    'Level 1' => 'NOC',
-                                                    'Level 2' => 'SPV NOC',
-                                                    'Level 3' => 'Teknisi',
-                                                    'Level 4' => 'SPV Teknisi',
-                                                    'Level 5' => 'Engineer',
-                                                    'Level 6' => 'Management',
-                                                ];
-                                                $latestEscalation = $record->actions()
-                                                    ->where('Action_Taken', 'Escalation')
-                                                    ->orderBy('Action_Time', 'desc')
-                                                    ->first();
-                                                return $latestEscalation ? $levelOrder[$latestEscalation->Action_Level] ?? $latestEscalation->Action_Level : '-';
-                                            }),
+    ->label('Open Level')
+    ->getStateUsing(function ($record) {
+        $levelOrder = [
+            'Level 1' => 'NOC',
+            'Level 2' => 'SPV NOC',
+            'Level 3' => 'Teknisi',
+            'Level 4' => 'SPV Teknisi',
+            'Level 5' => 'Engineer',
+            'Level 6' => 'Management',
+        ];
+        return $levelOrder[$record->Open_Level] ?? $record->Open_Level;
+    }),
+                                        TextEntry::make('Current_Escalation_Level')
+    ->label('Current Escalation')
+    ->getStateUsing(function ($record) {
+        $levelOrder = [
+            'Level 1' => 'NOC',
+            'Level 2' => 'SPV NOC',
+            'Level 3' => 'Teknisi',
+            'Level 4' => 'SPV Teknisi',
+            'Level 5' => 'Engineer',
+            'Level 6' => 'Management',
+        ];
+        return $record->Current_Escalation_Level 
+            ? ($levelOrder[$record->Current_Escalation_Level] ?? $record->Current_Escalation_Level)
+            : '-';
+    }),
                                         TextEntry::make('Catagory')
                                             ->label('Category'),
                                     ])

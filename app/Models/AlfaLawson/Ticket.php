@@ -388,6 +388,48 @@ class Ticket extends Model
         return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
     }
 
+    /**
+     * Relationship to TicketEvidence
+     */
+    public function evidences()
+    {
+        return $this->hasMany(TicketEvidence::class, 'No_Ticket', 'No_Ticket');
+    }
+
+    /**
+     * Get evidences by type
+     */
+    public function getImageEvidences()
+    {
+        return $this->evidences()->where('file_type', TicketEvidence::TYPE_IMAGE)->get();
+    }
+
+    public function getVideoEvidences()
+    {
+        return $this->evidences()->where('file_type', TicketEvidence::TYPE_VIDEO)->get();
+    }
+
+    public function getDocumentEvidences()
+    {
+        return $this->evidences()->where('file_type', TicketEvidence::TYPE_DOCUMENT)->get();
+    }
+
+    /**
+     * Get evidences by stage
+     */
+    public function getEvidencesByStage(string $stage)
+    {
+        return $this->evidences()->where('upload_stage', $stage)->get();
+    }
+
+    /**
+     * Count evidences
+     */
+    public function getEvidenceCountAttribute(): int
+    {
+        return $this->evidences()->count();
+    }
+
     // Method to update an action (for EditActionModal)
     public function updateAction($actionId, array $data)
     {

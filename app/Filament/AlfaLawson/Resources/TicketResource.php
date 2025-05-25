@@ -8,6 +8,8 @@ use App\Filament\AlfaLawson\Resources\TableRemoteResource;
 use App\Models\AlfaLawson\Ticket;
 use App\Models\AlfaLawson\TableRemote;
 use App\Models\User;
+use App\Models\AlfaLawson\TicketEvidence;
+use App\Services\EvidenceService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -29,12 +31,15 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Card;
 use Filament\Forms\Components\Fieldset;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Support\Enums\FontWeight;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Filament\Forms\Components\ViewField;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -269,7 +274,7 @@ class TicketResource extends Resource
             Section::make('Status Management')
                 ->schema([
                     Textarea::make('Action_Summry')
-                        ->label('Action Summry Summary')
+                        ->label('Action Summary')
                         ->required(fn (Forms\Get $get) => $get('Status') === 'CLOSED')
                         ->rows(5)
                         ->placeholder('Detail the steps taken to resolve the issue...')
@@ -311,6 +316,97 @@ class TicketResource extends Resource
                 ])
                 ->id('status-management')
                 ->visible(fn () => $operation === 'edit'),
+
+            Section::make('Evidence Management')
+                ->schema([
+                    FileUpload::make('evidences')
+                    ->label('Upload Evidence')
+                    ->multiple()
+                    ->disk('public')
+                    ->directory('ticket-evidences')
+                    ->acceptedFileTypes([
+                        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+                        'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/webm',
+                        'application/pdf',
+                        'application/msword',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'application/vnd.ms-excel',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'application/vnd.ms-powerpoint',
+                        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        'text/plain', 'text/csv'
+                    ])
+                    ->maxSize(50 * 1024)
+                    ->maxFiles(10)
+                    ->uploadingMessage('Uploading evidence...')
+                    ->helperText('Upload images, videos, or documents. Max 50MB per file, 10 files maximum. (Optional)')
+                    ->dehydrated(true) // Ensure files are included in form submission
+                    ->required(false)
+                    ->columnSpanFull(),
+
+                    Repeater::make('evidence_descriptions')
+                        ->label('Evidence Descriptions')
+                        ->schema([
+                            Forms\Components\Hidden::make('file_path'),
+                            Forms\Components\TextInput::make('file_name')
+                                ->label('File Name')
+                                ->disabled()
+                                ->columnSpan(1),
+                            Forms\Components\Select::make('upload_stage')
+                                ->label('Stage')
+                                ->options([
+                                    TicketEvidence::STAGE_INITIAL => 'Initial Report',
+                                    TicketEvidence::STAGE_INVESTIGATION => 'Investigation',
+                                    TicketEvidence::STAGE_RESOLUTION => 'Resolution',
+                                    TicketEvidence::STAGE_CLOSED => 'Closed',
+                                ])
+                                ->default(TicketEvidence::STAGE_INITIAL)
+                                ->required()
+                                ->columnSpan(1),
+                            Forms\Components\Textarea::make('description')
+                                ->label('Description')
+                                ->placeholder('Describe this evidence...')
+                                ->rows(2)
+                                ->columnSpan(2),
+                        ])
+                        ->columns(4)
+                        ->addable(false)
+                        ->deletable(false)
+                        ->reorderable(false)
+                        ->visible(fn (?Model $record) => $record && $record->evidences()->count() > 0)
+                        ->default(function (?Model $record) {
+                            if (!$record) return [];
+                            
+                            return $record->evidences()->latest()->get()->map(function ($evidence) {
+                                return [
+                                    'file_path' => $evidence->file_path,
+                                    'file_name' => $evidence->file_name,
+                                    'upload_stage' => $evidence->upload_stage,
+                                    'description' => $evidence->description,
+                                ];
+                            })->toArray();
+                        })
+                        ->columnSpanFull(),
+
+                    ViewField::make('existing_evidences')
+                        ->label('Existing Evidence')
+                        ->view('filament.components.ticket-evidences')
+                        ->viewData([
+                            'record' => fn (?Model $record) => $record,
+                            'evidences' => fn (?Model $record) => $record?->evidences()->latest()->get() ?? collect(),
+                        ])
+                        ->visible(fn (?Model $record) => $record && $record->evidences()->count() > 0)
+                        ->columnSpanFull(),
+                ])
+                ->description('Upload and manage ticket evidence files (optional)')
+                ->icon('heroicon-m-paper-clip')
+                ->collapsible()
+                ->persistCollapsed()
+                ->extraAttributes([
+                    'class' => 'bg-white shadow-sm border border-gray-200 rounded-lg p-6 mb-6',
+                ])
+                ->id('evidence-management')
+                ->visible(true),
 
             Section::make('Ticket Timeline')
                 ->schema([
@@ -544,122 +640,149 @@ class TicketResource extends Resource
                     ->placeholder('Not closed')
                     ->toggleable(isToggledHiddenByDefault: true),
             
+                TextColumn::make('evidence_count')
+                    ->label('Evidence')
+                    ->getStateUsing(fn ($record) => $record->evidences()->count())
+                    ->badge()
+                    ->color(fn (int $state): string => match (true) {
+                        $state === 0 => 'gray',
+                        $state <= 3 => 'info',
+                        $state <= 6 => 'warning',
+                        default => 'success',
+                    })
+                    ->icon(fn (int $state): string => $state > 0 ? 'heroicon-m-paper-clip' : 'heroicon-o-paper-clip')
+                    ->tooltip(function ($record): ?string {
+                        $evidences = $record->evidences();
+                        $images = $evidences->where('file_type', 'image')->count();
+                        $videos = $evidences->where('file_type', 'video')->count();
+                        $documents = $evidences->where('file_type', 'document')->count();
+                        
+                        if ($images + $videos + $documents === 0) {
+                            return 'No evidence attached';
+                        }
+                        
+                        $tooltip = "Evidence breakdown:\n";
+                        if ($images > 0) $tooltip .= "• Images: {$images}\n";
+                        if ($videos > 0) $tooltip .= "• Videos: {$videos}\n";
+                        if ($documents > 0) $tooltip .= "• Documents: {$documents}";
+                        
+                        return rtrim($tooltip);
+                    })
+                    ->sortable(false)
+                    ->searchable(false),
                 
-                /**
- * Contoh kode untuk perbaikan ToggleColumn di TicketResource.php
- */
-ToggleColumn::make('is_closed')
-    ->label('Close')
-    ->onIcon('heroicon-m-check-circle')
-    ->offIcon('heroicon-m-x-circle')
-    ->onColor('success')
-    ->offColor('danger')
-    ->getStateUsing(fn ($record) => $record?->Status === 'CLOSED')
-    ->updateStateUsing(function ($record, $state) {
-        try {
-            $now = now();
-            $newStatus = $state ? 'CLOSED' : 'OPEN';
-            $actionDescription = $state 
-                ? 'Ticket closed via toggle at ' . $now->format('d/m/Y H:i')
-                : 'Ticket reopened via toggle at ' . $now->format('d/m/Y H:i');
+                ToggleColumn::make('is_closed')
+                    ->label('Close')
+                    ->onIcon('heroicon-m-check-circle')
+                    ->offIcon('heroicon-m-x-circle')
+                    ->onColor('success')
+                    ->offColor('danger')
+                    ->getStateUsing(fn ($record) => $record?->Status === 'CLOSED')
+                    ->updateStateUsing(function ($record, $state) {
+                        try {
+                            $now = now();
+                            $newStatus = $state ? 'CLOSED' : 'OPEN';
+                            $actionDescription = $state 
+                                ? 'Ticket closed via toggle at ' . $now->format('d/m/Y H:i')
+                                : 'Ticket reopened via toggle at ' . $now->format('d/m/Y H:i');
 
-            // Refresh record untuk memastikan data terbaru
-            $record->refresh();
-            
-            // Jika status baru adalah CLOSED, hitung durasi yang akurat
-            if ($state) {
-                // Jika status sebelumnya pending, hitung dan tambahkan durasi pending terakhir
-                if ($record->Status === 'PENDING' && $record->Pending_Start) {
-                    $pendingStart = $record->Pending_Start;
-                    $additionalPendingSeconds = $now->diffInSeconds($pendingStart);
-                    $currentPending = $record->pending_duration_seconds ?? 0;
-                    $newPendingDuration = $currentPending + $additionalPendingSeconds;
-                    
-                    $record->pending_duration_seconds = $newPendingDuration;
-                    $record->Pending_Stop = $now;
-                    $record->save(); // Simpan perubahan ini dulu
-                }
-                
-                // Refresh dan dapatkan durasi dari histori
-                $record->refresh();
-                $pendingHistory = $record->getPendingHistory();
-                $openHistory = $record->getOpenHistory();
-                
-                // Hitung total durasi
-                $totalPendingSeconds = 0;
-                foreach ($pendingHistory as $period) {
-                    $totalPendingSeconds += $period['duration_seconds'];
-                }
-                
-                $totalOpenSeconds = 0;
-                foreach ($openHistory as $period) {
-                    $totalOpenSeconds += $period['duration_seconds'];
-                }
-                
-                $totalDurationSeconds = 0;
-                if ($record->Open_Time) {
-                    $totalDurationSeconds = $now->diffInSeconds($record->Open_Time);
-                }
-                
-                // Persiapkan data update
-                $updateData = [
-                    'Status' => $newStatus,
-                    'Closed_Time' => $state ? $now : null,
-                    'Closed_By' => $state ? Auth::id() : null,
-                    'Action_Summry' => $state ? $actionDescription : null,
-                ];
-                
-                // Tambahkan nilai timer untuk tiket CLOSED
-                if ($state) {
-                    $updateData['open_duration_seconds'] = max(0, $totalOpenSeconds);
-                    $updateData['pending_duration_seconds'] = max(0, $totalPendingSeconds);
-                    $updateData['total_duration_seconds'] = max(0, $totalDurationSeconds);
-                }
-            } else {
-                // Jika status baru adalah OPEN (reopened)
-                $updateData = [
-                    'Status' => $newStatus,
-                    'Closed_Time' => null,
-                    'Closed_By' => null,
-                ];
-            }
+                            // Refresh record untuk memastikan data terbaru
+                            $record->refresh();
+                            
+                            // Jika status baru adalah CLOSED, hitung durasi yang akurat
+                            if ($state) {
+                                // Jika status sebelumnya pending, hitung dan tambahkan durasi pending terakhir
+                                if ($record->Status === 'PENDING' && $record->Pending_Start) {
+                                    $pendingStart = $record->Pending_Start;
+                                    $additionalPendingSeconds = $now->diffInSeconds($pendingStart);
+                                    $currentPending = $record->pending_duration_seconds ?? 0;
+                                    $newPendingDuration = $currentPending + $additionalPendingSeconds;
+                                    
+                                    $record->pending_duration_seconds = $newPendingDuration;
+                                    $record->Pending_Stop = $now;
+                                    $record->save(); // Simpan perubahan ini dulu
+                                }
+                                
+                                // Refresh dan dapatkan durasi dari histori
+                                $record->refresh();
+                                $pendingHistory = $record->getPendingHistory();
+                                $openHistory = $record->getOpenHistory();
+                                
+                                // Hitung total durasi
+                                $totalPendingSeconds = 0;
+                                foreach ($pendingHistory as $period) {
+                                    $totalPendingSeconds += $period['duration_seconds'];
+                                }
+                                
+                                $totalOpenSeconds = 0;
+                                foreach ($openHistory as $period) {
+                                    $totalOpenSeconds += $period['duration_seconds'];
+                                }
+                                
+                                $totalDurationSeconds = 0;
+                                if ($record->Open_Time) {
+                                    $totalDurationSeconds = $now->diffInSeconds($record->Open_Time);
+                                }
+                                
+                                // Persiapkan data update
+                                $updateData = [
+                                    'Status' => $newStatus,
+                                    'Closed_Time' => $state ? $now : null,
+                                    'Closed_By' => $state ? Auth::id() : null,
+                                    'Action_Summry' => $state ? $actionDescription : null,
+                                ];
+                                
+                                // Tambahkan nilai timer untuk tiket CLOSED
+                                if ($state) {
+                                    $updateData['open_duration_seconds'] = max(0, $totalOpenSeconds);
+                                    $updateData['pending_duration_seconds'] = max(0, $totalPendingSeconds);
+                                    $updateData['total_duration_seconds'] = max(0, $totalDurationSeconds);
+                                }
+                            } else {
+                                // Jika status baru adalah OPEN (reopened)
+                                $updateData = [
+                                    'Status' => $newStatus,
+                                    'Closed_Time' => null,
+                                    'Closed_By' => null,
+                                ];
+                            }
 
-            $record->update($updateData);
+                            $record->update($updateData);
 
-            // Tambahkan action untuk tracking
-            \App\Models\AlfaLawson\TicketAction::create([
-                'No_Ticket' => $record->No_Ticket,
-                'Action_Taken' => $state ? 'Closed' : 'Start Clock',
-                'Action_Time' => $now,
-                'Action_By' => Auth::user()->name,
-                'Action_Level' => Auth::user()->Level ?? 'Level 1',
-                'Action_Description' => $actionDescription,
-            ]);
+                            // Tambahkan action untuk tracking
+                            \App\Models\AlfaLawson\TicketAction::create([
+                                'No_Ticket' => $record->No_Ticket,
+                                'Action_Taken' => $state ? 'Closed' : 'Start Clock',
+                                'Action_Time' => $now,
+                                'Action_By' => Auth::user()->name,
+                                'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                                'Action_Description' => $actionDescription,
+                            ]);
 
-            // Log nilai timer yang disimpan
-            if ($state) {
-                Log::debug('Timer values saved on toggle to CLOSED', [
-                    'ticket' => $record->No_Ticket,
-                    'open_seconds' => $updateData['open_duration_seconds'] ?? 'not set',
-                    'pending_seconds' => $updateData['pending_duration_seconds'] ?? 'not set',
-                    'total_seconds' => $updateData['total_duration_seconds'] ?? 'not set'
-                ]);
-            }
+                            // Log nilai timer yang disimpan
+                            if ($state) {
+                                Log::debug('Timer values saved on toggle to CLOSED', [
+                                    'ticket' => $record->No_Ticket,
+                                    'open_seconds' => $updateData['open_duration_seconds'] ?? 'not set',
+                                    'pending_seconds' => $updateData['pending_duration_seconds'] ?? 'not set',
+                                    'total_seconds' => $updateData['total_duration_seconds'] ?? 'not set'
+                                ]);
+                            }
 
-            Notification::make()
-                ->success()
-                ->title('Status Updated')
-                ->body('The ticket status has been updated successfully.')
-                ->send();
-        } catch (\Exception $e) {
-            Notification::make()
-                ->danger()
-                ->title('Error Updating Status')
-                ->body($e->getMessage())
-                ->send();
-        }
-    })
-    ->visible(fn ($record) => $record && ($record->Status !== 'CLOSED' || Auth::user()->can('reopen_ticket', $record))),
+                            Notification::make()
+                                ->success()
+                                ->title('Status Updated')
+                                ->body('The ticket status has been updated successfully.')
+                                ->send();
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title('Error Updating Status')
+                                ->body($e->getMessage())
+                                ->send();
+                        }
+                    })
+                    ->visible(fn ($record) => $record && ($record->Status !== 'CLOSED' || Auth::user()->can('reopen_ticket', $record))),
             ])
             ->defaultSort('Open_Time', 'desc')
             ->filters([
@@ -737,6 +860,66 @@ ToggleColumn::make('is_closed')
             ->emptyStateHeading('No tickets found')
             ->emptyStateDescription('Create your first ticket to get started')
             ->emptyStateIcon('heroicon-o-ticket');
+    }
+
+    protected function saveEvidenceFiles(Model $record, $files): void
+{
+    if (!$files) return;
+
+    Log::debug('saveEvidenceFiles called', [
+        'ticket' => $record->No_Ticket,
+        'files_count' => count($files),
+        'files' => array_map(fn($file) => $file->getClientOriginalName(), $files),
+    ]);
+
+    $evidenceService = app(EvidenceService::class);
+    $files = is_array($files) ? $files : [$files];
+
+    $result = $evidenceService->uploadFiles($record->No_Ticket, $files, [
+        'upload_stage' => TicketEvidence::STAGE_INITIAL,
+        'description' => null,
+    ]);
+
+    if ($result['success_count'] > 0) {
+        Log::info('Evidence files uploaded via TicketResource', [
+            'ticket' => $record->No_Ticket,
+            'uploaded_count' => $result['success_count'],
+        ]);
+    }
+
+    if ($result['error_count'] > 0) {
+        Log::error('Failed to upload some evidence files', [
+            'ticket' => $record->No_Ticket,
+            'errors' => $result['errors'],
+        ]);
+        Notification::make()
+            ->warning()
+            ->title('Upload Issues')
+            ->body('Some files failed to upload: ' . implode(', ', array_column($result['errors'], 'error')))
+            ->send();
+    }
+}
+
+    public static function afterCreate($record, array $data): void
+    {
+        if (isset($data['evidences']) && !empty($data['evidences'])) {
+            Log::debug('afterCreate: Saving evidence files', [
+                'ticket' => $record->No_Ticket,
+                'files_count' => count($data['evidences']),
+            ]);
+            static::getModelInstance()->saveEvidenceFiles($record, $data['evidences']);
+        }
+    }
+
+    public static function afterUpdate($record, array $data): void
+    {
+        if (isset($data['evidences']) && !empty($data['evidences'])) {
+            Log::debug('afterUpdate: Saving evidence files', [
+                'ticket' => $record->No_Ticket,
+                'files_count' => count($data['evidences']),
+            ]);
+            static::getModelInstance()->saveEvidenceFiles($record, $data['evidences']);
+        }
     }
 
     public static function getRelations(): array

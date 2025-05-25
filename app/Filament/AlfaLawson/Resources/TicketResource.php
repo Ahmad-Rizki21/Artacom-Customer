@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class TicketResource extends Resource
 {
@@ -544,50 +545,121 @@ class TicketResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             
                 
-                ToggleColumn::make('is_closed')
-                    ->label('Close')
-                    ->onIcon('heroicon-m-check-circle')
-                    ->offIcon('heroicon-m-x-circle')
-                    ->onColor('success')
-                    ->offColor('danger')
-                    ->getStateUsing(fn ($record) => $record?->Status === 'CLOSED')
-                    ->updateStateUsing(function ($record, $state) {
-                        try {
-                            $newStatus = $state ? 'CLOSED' : 'OPEN';
-                            $actionDescription = $state 
-                                ? 'Ticket closed via toggle at ' . now()->format('d/m/Y H:i')
-                                : 'Ticket reopened via toggle at ' . now()->format('d/m/Y H:i');
+                /**
+ * Contoh kode untuk perbaikan ToggleColumn di TicketResource.php
+ */
+ToggleColumn::make('is_closed')
+    ->label('Close')
+    ->onIcon('heroicon-m-check-circle')
+    ->offIcon('heroicon-m-x-circle')
+    ->onColor('success')
+    ->offColor('danger')
+    ->getStateUsing(fn ($record) => $record?->Status === 'CLOSED')
+    ->updateStateUsing(function ($record, $state) {
+        try {
+            $now = now();
+            $newStatus = $state ? 'CLOSED' : 'OPEN';
+            $actionDescription = $state 
+                ? 'Ticket closed via toggle at ' . $now->format('d/m/Y H:i')
+                : 'Ticket reopened via toggle at ' . $now->format('d/m/Y H:i');
 
-                            $record->update([
-                                'Status' => $newStatus,
-                                'Closed_Time' => $state ? now() : null,
-                                'Closed_By' => $state ? Auth::id() : null,
-                                'Action_Summry' => $state ? $actionDescription : null,
-                            ]);
+            // Refresh record untuk memastikan data terbaru
+            $record->refresh();
+            
+            // Jika status baru adalah CLOSED, hitung durasi yang akurat
+            if ($state) {
+                // Jika status sebelumnya pending, hitung dan tambahkan durasi pending terakhir
+                if ($record->Status === 'PENDING' && $record->Pending_Start) {
+                    $pendingStart = $record->Pending_Start;
+                    $additionalPendingSeconds = $now->diffInSeconds($pendingStart);
+                    $currentPending = $record->pending_duration_seconds ?? 0;
+                    $newPendingDuration = $currentPending + $additionalPendingSeconds;
+                    
+                    $record->pending_duration_seconds = $newPendingDuration;
+                    $record->Pending_Stop = $now;
+                    $record->save(); // Simpan perubahan ini dulu
+                }
+                
+                // Refresh dan dapatkan durasi dari histori
+                $record->refresh();
+                $pendingHistory = $record->getPendingHistory();
+                $openHistory = $record->getOpenHistory();
+                
+                // Hitung total durasi
+                $totalPendingSeconds = 0;
+                foreach ($pendingHistory as $period) {
+                    $totalPendingSeconds += $period['duration_seconds'];
+                }
+                
+                $totalOpenSeconds = 0;
+                foreach ($openHistory as $period) {
+                    $totalOpenSeconds += $period['duration_seconds'];
+                }
+                
+                $totalDurationSeconds = 0;
+                if ($record->Open_Time) {
+                    $totalDurationSeconds = $now->diffInSeconds($record->Open_Time);
+                }
+                
+                // Persiapkan data update
+                $updateData = [
+                    'Status' => $newStatus,
+                    'Closed_Time' => $state ? $now : null,
+                    'Closed_By' => $state ? Auth::id() : null,
+                    'Action_Summry' => $state ? $actionDescription : null,
+                ];
+                
+                // Tambahkan nilai timer untuk tiket CLOSED
+                if ($state) {
+                    $updateData['open_duration_seconds'] = max(0, $totalOpenSeconds);
+                    $updateData['pending_duration_seconds'] = max(0, $totalPendingSeconds);
+                    $updateData['total_duration_seconds'] = max(0, $totalDurationSeconds);
+                }
+            } else {
+                // Jika status baru adalah OPEN (reopened)
+                $updateData = [
+                    'Status' => $newStatus,
+                    'Closed_Time' => null,
+                    'Closed_By' => null,
+                ];
+            }
 
-                            \App\Models\AlfaLawson\TicketAction::create([
-                                'No_Ticket' => $record->No_Ticket,
-                                'Action_Taken' => $state ? 'Closed' : 'Start Clock',
-                                'Action_Time' => now(),
-                                'Action_By' => Auth::user()->name,
-                                'Action_Level' => Auth::user()->Level ?? 'Level 1',
-                                'Action_Description' => $actionDescription,
-                            ]);
+            $record->update($updateData);
 
-                            Notification::make()
-                                ->success()
-                                ->title('Status Updated')
-                                ->body('The ticket status has been updated successfully.')
-                                ->send();
-                        } catch (\Exception $e) {
-                            Notification::make()
-                                ->danger()
-                                ->title('Error Updating Status')
-                                ->body($e->getMessage())
-                                ->send();
-                        }
-                    })
-                    ->visible(fn ($record) => $record && ($record->Status !== 'CLOSED' || Auth::user()->can('reopen_ticket', $record))),
+            // Tambahkan action untuk tracking
+            \App\Models\AlfaLawson\TicketAction::create([
+                'No_Ticket' => $record->No_Ticket,
+                'Action_Taken' => $state ? 'Closed' : 'Start Clock',
+                'Action_Time' => $now,
+                'Action_By' => Auth::user()->name,
+                'Action_Level' => Auth::user()->Level ?? 'Level 1',
+                'Action_Description' => $actionDescription,
+            ]);
+
+            // Log nilai timer yang disimpan
+            if ($state) {
+                Log::debug('Timer values saved on toggle to CLOSED', [
+                    'ticket' => $record->No_Ticket,
+                    'open_seconds' => $updateData['open_duration_seconds'] ?? 'not set',
+                    'pending_seconds' => $updateData['pending_duration_seconds'] ?? 'not set',
+                    'total_seconds' => $updateData['total_duration_seconds'] ?? 'not set'
+                ]);
+            }
+
+            Notification::make()
+                ->success()
+                ->title('Status Updated')
+                ->body('The ticket status has been updated successfully.')
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Error Updating Status')
+                ->body($e->getMessage())
+                ->send();
+        }
+    })
+    ->visible(fn ($record) => $record && ($record->Status !== 'CLOSED' || Auth::user()->can('reopen_ticket', $record))),
             ])
             ->defaultSort('Open_Time', 'desc')
             ->filters([

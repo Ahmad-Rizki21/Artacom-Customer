@@ -13,6 +13,10 @@
         totalSeconds: {{ $totalTimeSeconds ?? 0 }},
         // Akumulasi durasi pending dari backend (hanya untuk perhitungan di frontend)
         pendingDurationSeconds: {{ $record->pending_duration_seconds ?? 0 }},
+        // Durasi tersimpan untuk tiket CLOSED
+        storedOpenDuration: {{ $record->open_duration_seconds ?? 0 }},
+        storedPendingDuration: {{ $record->pending_duration_seconds ?? 0 }},
+        storedTotalDuration: {{ $record->total_duration_seconds ?? 0 }},
 
         // State internal frontend
         timerInterval: null,
@@ -30,26 +34,32 @@
                 openSeconds: this.openSeconds,
                 pendingSeconds: this.pendingSeconds,
                 totalSeconds: this.totalSeconds,
-                pendingDurationSeconds: this.pendingDurationSeconds
+                pendingDurationSeconds: this.pendingDurationSeconds,
+                storedOpenDuration: this.storedOpenDuration,
+                storedPendingDuration: this.storedPendingDuration,
+                storedTotalDuration: this.storedTotalDuration
             });
 
+            // PERBAIKAN: Jika status CLOSED dan ada nilai tersimpan, gunakan nilai tersimpan
+            if (this.status === 'CLOSED' && this.storedOpenDuration > 0) {
+                console.log('Alpine Init - Using stored durations for CLOSED ticket');
+                this.openSeconds = this.storedOpenDuration;
+                this.pendingSeconds = this.storedPendingDuration;
+                this.totalSeconds = this.storedTotalDuration;
+            }
+
             this.updateTimerDisplay(); // Tampilkan nilai awal
+            
             if (this.status !== 'CLOSED') {
                 console.log('Alpine Init - Starting timer interval');
                 this.startTimer();
             } else {
-                console.log('Alpine Init - Timer not started (CLOSED)');
+                console.log('Alpine Init - Timer not started (CLOSED). Using stored values.');
             }
 
             // Listener untuk update dari Livewire
             $wire.on('timerStateUpdated', (data) => {
                 console.log('Alpine Event - Received timerStateUpdated:', data);
-
-                // Optional: Throttle updates on frontend side too
-                // if (this.isUpdating || (data.timestamp && this.lastUpdateTimestamp && (data.timestamp - this.lastUpdateTimestamp < 500))) {
-                //     console.log('Alpine Event - Skipping update (throttled)');
-                //     return;
-                // }
 
                 this.isUpdating = true; // Flag to prevent calculation conflicts
                 this.lastUpdateTimestamp = data.timestamp;
@@ -62,10 +72,35 @@
                 this.closedTime = data.closedTime || this.closedTime;
                 this.pendingDurationSeconds = data.pendingDurationSeconds !== undefined ? data.pendingDurationSeconds : this.pendingDurationSeconds;
 
-                // LANGSUNG GUNAKAN NILAI DARI BACKEND untuk sinkronisasi
-                this.openSeconds = data.openSeconds !== undefined ? data.openSeconds : this.openSeconds;
-                this.pendingSeconds = data.pendingSeconds !== undefined ? data.pendingSeconds : this.pendingSeconds;
-                this.totalSeconds = data.totalSeconds !== undefined ? data.totalSeconds : this.totalSeconds;
+                // PERBAIKAN: Jika status CLOSED, periksa apakah ada nilai tersimpan
+                if (this.status === 'CLOSED') {
+                    // Gunakan nilai dari backend jika tersedia
+                    this.openSeconds = data.openSeconds !== undefined ? data.openSeconds : this.openSeconds;
+                    this.pendingSeconds = data.pendingSeconds !== undefined ? data.pendingSeconds : this.pendingSeconds;
+                    this.totalSeconds = data.totalSeconds !== undefined ? data.totalSeconds : this.totalSeconds;
+                    
+                    // Simpan nilai tersimpan untuk penggunaan masa depan
+                    this.storedOpenDuration = this.openSeconds;
+                    this.storedPendingDuration = this.pendingSeconds;
+                    this.storedTotalDuration = this.totalSeconds;
+                    
+                    console.log('Alpine Event - Stored final values for CLOSED ticket:', {
+                        openSeconds: this.openSeconds,
+                        pendingSeconds: this.pendingSeconds,
+                        totalSeconds: this.totalSeconds
+                    });
+                } else {
+                    // Untuk status lain, gunakan nilai dari backend
+                    if (data.openSeconds !== undefined) {
+                        this.openSeconds = data.openSeconds;
+                    }
+                    if (data.pendingSeconds !== undefined) {
+                        this.pendingSeconds = data.pendingSeconds;
+                    }
+                    if (data.totalSeconds !== undefined) {
+                        this.totalSeconds = data.totalSeconds;
+                    }
+                }
 
                 console.log('Alpine Event - Updated state:', {
                     status: this.status,
@@ -113,6 +148,7 @@
 
         // Fungsi ini berjalan setiap detik di frontend untuk update visual
         updateTimer() {
+            // Jangan update kalau sedang proses update lain atau sudah CLOSED atau tidak ada waktu mulai
             if (this.isUpdating || this.status === 'CLOSED' || !this.startTime) return;
 
             const now = Math.floor(Date.now() / 1000);
@@ -181,7 +217,9 @@
     <div class="ticket-timer-header flex items-center justify-between mb-4">
         <!-- ... header content ... -->
          <h3 class="ticket-timer-title font-semibold text-lg">Ticket Timer</h3>
-         <!-- ... dark mode toggle ... -->
+         <button @click="toggleDarkMode" class="text-sm px-2 py-1 rounded-md" :class="darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'">
+            <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
+         </button>
     </div>
 
     <div class="ticket-timer-grid grid grid-cols-3 gap-4 mb-4">

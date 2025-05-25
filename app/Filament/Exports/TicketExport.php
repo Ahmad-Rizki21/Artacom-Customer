@@ -52,11 +52,12 @@ class TicketExport implements
             'Open Date',
             'Pending Date',
             'Closed Date',
+            'Pending Reason',           // Tambahkan kolom untuk Pending Reason
             'Action Description',
             'Open Clock',
             'Total Pending',
             'Total Duration',
-            'Downtime',
+            'Downtime',                 // Downtime = Total Duration - Total Pending
         ];
     }
 
@@ -67,33 +68,72 @@ class TicketExport implements
         $alamat = $remoteData ? $remoteData->Nama_Toko : '-';
         $ipAddress = $remoteData ? $remoteData->IP_Address : '-';
 
+        // Ambil action terakhir
         $latestAction = TicketAction::where('No_Ticket', $ticket->No_Ticket)
             ->orderBy('Action_Time', 'desc')
             ->first();
 
-        // Parse durations to seconds using the safe parsing function
-        // Use null coalescing operator (??) to provide default value if property is null
-        $openDurationSeconds = $this->parseDurationToSeconds($ticket->open_duration ?? '00:00:00');
-        $totalPendingSeconds = $this->parseDurationToSeconds($ticket->pending_duration ?? '00:00:00');
-        $totalDurationSeconds = $this->parseDurationToSeconds($ticket->total_duration ?? '00:00:00');
+        // Ambil semua action untuk tiket ini untuk memperoleh riwayat pending yang lengkap
+        $allPendingActions = TicketAction::where('No_Ticket', $ticket->No_Ticket)
+            ->where('Action_Taken', 'Pending Clock')
+            ->orderBy('Action_Time', 'desc')
+            ->get();
+        
+        // Ambil pending reason dari action terakhir dengan Pending Clock
+        $latestPendingAction = $allPendingActions->first();
+        $pendingReason = $latestPendingAction ? $latestPendingAction->Action_Description : $ticket->Pending_Reason ?? '-';
 
-        // Calculate downtime in seconds, ensuring it's not negative
+        // Jika pending reason terlalu panjang, potong dan tambahkan elipsis
+        if (strlen($pendingReason) > 150) {
+            $pendingReason = substr($pendingReason, 0, 147) . '...';
+        }
+
+        // Gunakan nilai tersimpan dalam database jika tersedia
+        // Ini memastikan nilai akurat bahkan setelah tiket ditutup
+        $openDurationSeconds = $ticket->open_duration_seconds ?? 0;
+        $totalPendingSeconds = $ticket->pending_duration_seconds ?? 0;
+        $totalDurationSeconds = $ticket->total_duration_seconds ?? 0;
+        
+        // Jika tidak ada nilai tersimpan, hitung ulang
+        if ($openDurationSeconds == 0 && $totalPendingSeconds == 0 && $totalDurationSeconds == 0) {
+            // Perhitungan menggunakan timer dari model
+            $timer = $ticket->getCurrentTimer();
+            $openDurationSeconds = $timer['open']['seconds'] ?? 0;
+            $totalPendingSeconds = $timer['pending']['seconds'] ?? 0;
+            $totalDurationSeconds = $timer['total']['seconds'] ?? 0;
+            
+            // Jika masih 0, coba parsing dari atribut lama (jika ada)
+            if ($openDurationSeconds == 0 && $ticket->open_duration) {
+                $openDurationSeconds = $this->parseDurationToSeconds($ticket->open_duration);
+            }
+            
+            if ($totalPendingSeconds == 0 && $ticket->pending_duration) {
+                $totalPendingSeconds = $this->parseDurationToSeconds($ticket->pending_duration);
+            }
+            
+            if ($totalDurationSeconds == 0 && $ticket->total_duration) {
+                $totalDurationSeconds = $this->parseDurationToSeconds($ticket->total_duration);
+            }
+        }
+
+        // Calculate downtime in seconds (Total Duration - Total Pending)
+        // Downtime adalah waktu tiket aktif (tidak termasuk waktu pending)
         $downtimeSeconds = max(0, $totalDurationSeconds - $totalPendingSeconds);
+        
+        // Atau, jika Downtime adalah sama dengan Open Duration:
+        // $downtimeSeconds = $openDurationSeconds;
 
-        // Format all durations back to HH:MM:SS
+        // Format semua durasi ke format HH:MM:SS
         $openDurationFormatted = $this->formatDuration($openDurationSeconds);
         $totalPendingFormatted = $this->formatDuration($totalPendingSeconds);
         $totalDurationFormatted = $this->formatDuration($totalDurationSeconds);
         $downtimeFormatted = $this->formatDuration($downtimeSeconds);
 
-        // Log for debugging (optional but good practice)
+        // Log untuk debugging
         Log::info("Ticket {$ticket->No_Ticket} Export Durations", [
-            'open_duration_raw' => $ticket->open_duration,
-            'pending_duration_raw' => $ticket->pending_duration,
-            'total_duration_raw' => $ticket->total_duration,
-            'open_seconds' => $openDurationSeconds,
-            'pending_seconds' => $totalPendingSeconds,
-            'total_seconds' => $totalDurationSeconds,
+            'open_duration_seconds' => $openDurationSeconds,
+            'pending_duration_seconds' => $totalPendingSeconds,
+            'total_duration_seconds' => $totalDurationSeconds,
             'downtime_seconds' => $downtimeSeconds,
             'open_formatted' => $openDurationFormatted,
             'pending_formatted' => $totalPendingFormatted,
@@ -111,8 +151,9 @@ class TicketExport implements
             $ticket->Problem_Summary ?? '-',
             $ticket->Status ?? '-',
             optional($ticket->Open_Time)->format('d/m/Y H:i:s') ?? '-',
-            optional($ticket->Pending_Start)->format('d/m/Y H:i:s') ?? '-', // Note: This is Pending Start Date, not duration
+            optional($ticket->Pending_Start)->format('d/m/Y H:i:s') ?? '-',
             optional($ticket->Closed_Time)->format('d/m/Y H:i:s') ?? '-',
+            $pendingReason,  // Pending Reason
             $latestAction->Action_Description ?? '-',
             $openDurationFormatted, // Open Clock (Formatted)
             $totalPendingFormatted, // Total Pending (Formatted)
@@ -135,11 +176,12 @@ class TicketExport implements
             'I' => 20, // Open Date
             'J' => 20, // Pending Date
             'K' => 20, // Closed Date
-            'L' => 30, // Action Description
-            'M' => 15, // Open Clock
-            'N' => 15, // Total Pending
-            'O' => 15, // Total Duration
-            'P' => 15, // Downtime
+            'L' => 30, // Pending Reason
+            'M' => 30, // Action Description
+            'N' => 15, // Open Clock
+            'O' => 15, // Total Pending
+            'P' => 15, // Total Duration
+            'Q' => 15, // Downtime
         ];
     }
 
@@ -150,7 +192,7 @@ class TicketExport implements
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->mergeCells('A1:P1');
+        $sheet->mergeCells('A1:Q1');
         $sheet->setCellValue('A1', 'Laporan Ticket Problem PT. Artacomindo');
         $sheet->getStyle('A1')->applyFromArray([
             'font' => [
@@ -165,7 +207,7 @@ class TicketExport implements
         ]);
         $sheet->getRowDimension(1)->setRowHeight(30);
 
-        $sheet->mergeCells('A2:P2');
+        $sheet->mergeCells('A2:Q2');
         $sheet->setCellValue('A2', 'Periode: ' . now()->format('d/m/Y H:i:s'));
         $sheet->getStyle('A2')->applyFromArray([
             'font' => [
@@ -180,7 +222,7 @@ class TicketExport implements
         ]);
         $sheet->getRowDimension(2)->setRowHeight(25);
 
-        $sheet->getStyle('A4:P4')->applyFromArray([
+        $sheet->getStyle('A4:Q4')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 12,
@@ -205,7 +247,7 @@ class TicketExport implements
         $sheet->getRowDimension(4)->setRowHeight(30);
 
         $highestRow = $sheet->getHighestRow();
-        $sheet->getStyle("A5:P{$highestRow}")->applyFromArray([
+        $sheet->getStyle("A5:Q{$highestRow}")->applyFromArray([
             'alignment' => [
                 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
                 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
@@ -221,7 +263,7 @@ class TicketExport implements
 
         for ($row = 5; $row <= $highestRow; $row++) {
             if (($row % 2) === 0) {
-                $sheet->getStyle("A{$row}:P{$row}")->applyFromArray([
+                $sheet->getStyle("A{$row}:Q{$row}")->applyFromArray([
                     'fill' => [
                         'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
                         'startColor' => ['argb' => 'FFF2F2F2'],
@@ -278,7 +320,6 @@ class TicketExport implements
         return ($hours * 3600) + ($minutes * 60) + $seconds;
     }
 
-
     private function formatDuration(int $seconds): string
     {
         if ($seconds < 0) {
@@ -292,4 +333,3 @@ class TicketExport implements
         );
     }
 }
-

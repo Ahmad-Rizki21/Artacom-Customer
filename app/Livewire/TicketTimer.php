@@ -17,7 +17,6 @@ class TicketTimer extends Component
     public $slaPercentage = 0;
     private $lastUpdated = 0;
 
-    // Listener tetap sama
     protected $listeners = ['ticketStatusUpdated' => 'updateTimer'];
 
     public function getListeners()
@@ -27,7 +26,6 @@ class TicketTimer extends Component
         ];
     }
 
-    // Mount tetap sama
     public function mount(Ticket $ticket = null)
     {
         if (!$ticket || !$ticket->exists) {
@@ -45,13 +43,11 @@ class TicketTimer extends Component
         $this->initializeTimer();
     }
 
-    // InitializeTimer tetap sama
     public function initializeTimer()
     {
         if (!$this->ticket || !$this->ticket->Open_Time) {
             Log::error('Ticket or Open_Time is null in initializeTimer', [
                 'ticket_id' => $this->ticket->No_Ticket ?? 'null',
-                // ... other log details
             ]);
             $this->openTimeSeconds = 0;
             $this->pendingTimeSeconds = 0;
@@ -61,8 +57,11 @@ class TicketTimer extends Component
             $this->openTimeSeconds = $timer['open']['seconds'] ?? 0;
             $this->pendingTimeSeconds = $timer['pending']['seconds'] ?? 0;
             $this->totalTimeSeconds = $timer['total']['seconds'] ?? 0;
+            
+            // Tambahkan log untuk memastikan timer terisi dengan benar
             Log::debug('Initialized timer values', [
                 'ticket_id' => $this->ticket->No_Ticket,
+                'status' => $this->ticket->Status,
                 'openSeconds' => $this->openTimeSeconds,
                 'pendingSeconds' => $this->pendingTimeSeconds,
                 'totalSeconds' => $this->totalTimeSeconds,
@@ -71,15 +70,9 @@ class TicketTimer extends Component
         }
     }
 
-    // UpdateTimer disederhanakan
     public function updateTimer()
     {
         $now = now()->timestamp;
-        // Throttle updates if needed (optional, 500ms example)
-        // if ($now - $this->lastUpdated < 500) {
-        //     return;
-        // }
-
         $this->ticket->refresh(); // Get latest data from DB
         $timer = $this->ticket->getCurrentTimer(); // Calculate current timer values based on DB state
 
@@ -87,8 +80,33 @@ class TicketTimer extends Component
         $this->pendingTimeSeconds = $timer['pending']['seconds'];
         $this->totalTimeSeconds = $timer['total']['seconds'];
 
-        // HAPUS: Logika akumulasi pending_duration_seconds di sini dihapus.
-        // Perhitungan ini sekarang ditangani oleh model Ticket.
+        // PERBAIKAN: Ketika status CLOSED, pastikan nilai timer tersimpan
+        if ($this->ticket->Status === 'CLOSED' && $this->ticket->Closed_Time) {
+            // Tambahkan log untuk debugging
+            Log::debug('Ticket closed, saving final timer values', [
+                'ticket_id' => $this->ticket->No_Ticket,
+                'status' => $this->ticket->Status,
+                'openSeconds' => $this->openTimeSeconds,
+                'pendingSeconds' => $this->pendingTimeSeconds,
+                'totalSeconds' => $this->totalTimeSeconds,
+            ]);
+            
+            // Simpan nilai timer saat CLOSED ke database jika belum ada
+            if (!$this->ticket->open_duration_seconds) {
+                $this->ticket->update([
+                    'open_duration_seconds' => $this->openTimeSeconds,
+                    'pending_duration_seconds' => $this->pendingTimeSeconds,
+                    'total_duration_seconds' => $this->totalTimeSeconds
+                ]);
+                
+                Log::debug('Saved final timer values to database', [
+                    'ticket_id' => $this->ticket->No_Ticket,
+                    'open_duration_seconds' => $this->openTimeSeconds,
+                    'pending_duration_seconds' => $this->pendingTimeSeconds,
+                    'total_duration_seconds' => $this->totalTimeSeconds
+                ]);
+            }
+        }
 
         Log::debug('Updated timer values from backend', [
             'ticket_id' => $this->ticket->No_Ticket,
@@ -119,7 +137,6 @@ class TicketTimer extends Component
         $this->lastUpdated = $now;
     }
 
-    // Render tetap sama
     public function render()
     {
         if (!$this->ticket) {

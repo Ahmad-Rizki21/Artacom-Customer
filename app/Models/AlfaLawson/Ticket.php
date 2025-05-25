@@ -48,6 +48,8 @@ class Ticket extends Model
         'Action_Summry',
         'pending_duration_seconds',
         'Current_Escalation_Level',
+        'open_duration_seconds',
+        'total_duration_seconds',
     ];
 
     protected $casts = [
@@ -129,13 +131,13 @@ class Ticket extends Model
                         }
 
                         // Set data penutupan
-                        $model->Closed_Time = now();
+                        $now = now();
+                        $model->Closed_Time = $now;
                         $model->Closed_By = Auth::id();
 
                         // Jika sebelumnya pending, hitung durasi pending saat ini
                         if ($oldStatus === self::STATUS_PENDING && $model->Pending_Start) {
                             $pendingStart = Carbon::parse($model->Pending_Start);
-                            $now = now();
                             $additionalPendingSeconds = $now->timestamp - $pendingStart->timestamp;
                             $currentDuration = $model->pending_duration_seconds ?? 0;
                             $newDuration = max(0, $currentDuration + $additionalPendingSeconds);
@@ -152,6 +154,18 @@ class Ticket extends Model
                             $model->pending_duration_seconds = $newDuration;
                             $model->Pending_Stop = $now;
                         }
+
+                        // PERBAIKAN: Simpan durasi final ke kolom yang sesuai
+                        $currentTimer = $model->getCurrentTimer(true); // true = gunakan waktu tutup
+                        $model->open_duration_seconds = $currentTimer['open']['seconds'];
+                        $model->total_duration_seconds = $currentTimer['total']['seconds'];
+                        
+                        Log::debug('Saving final durations on close', [
+                            'ticket' => $model->No_Ticket,
+                            'open_duration_seconds' => $model->open_duration_seconds,
+                            'pending_duration_seconds' => $model->pending_duration_seconds,
+                            'total_duration_seconds' => $model->total_duration_seconds,
+                        ]);
                         break;
 
                     case self::STATUS_OPEN:
@@ -193,6 +207,15 @@ class Ticket extends Model
             if (isset($model->attributes['pending_duration_seconds'])) {
                 $model->attributes['pending_duration_seconds'] = max(0, (int) $model->attributes['pending_duration_seconds']);
             }
+            
+            // PERBAIKAN: Pastikan nilai durasi lainnya juga tidak negatif
+            if (isset($model->attributes['open_duration_seconds'])) {
+                $model->attributes['open_duration_seconds'] = max(0, (int) $model->attributes['open_duration_seconds']);
+            }
+            
+            if (isset($model->attributes['total_duration_seconds'])) {
+                $model->attributes['total_duration_seconds'] = max(0, (int) $model->attributes['total_duration_seconds']);
+            }
         });
     }
 
@@ -210,7 +233,12 @@ class Ticket extends Model
         $start = Carbon::parse($this->Open_Time)->timestamp;
         $now = Carbon::now()->timestamp;
 
+        // PERBAIKAN: Jika tiket sudah ditutup dan ada nilai tersimpan, gunakan itu
         if ($this->Status === 'CLOSED' && $this->Closed_Time) {
+            if (isset($this->open_duration_seconds) && $this->open_duration_seconds > 0) {
+                return $this->open_duration_seconds;
+            }
+            
             $end = Carbon::parse($this->Closed_Time)->timestamp;
             $duration = $end - $start;
             $duration -= $this->pending_duration_seconds ?? 0;
@@ -238,9 +266,37 @@ class Ticket extends Model
         return max(0, $this->pending_duration_seconds ?? 0);
     }
 
-    public function getCurrentTimer()
+    /**
+     * Mendapatkan nilai timer saat ini berdasarkan status tiket
+     * 
+     * @param bool $useClosedTime Gunakan waktu tutup untuk perhitungan (untuk saat menutup tiket)
+     * @return array
+     */
+    public function getCurrentTimer($useClosedTime = false)
     {
-        $now = now()->getTimestamp();
+        // PERBAIKAN: Untuk tiket yang sudah CLOSED, gunakan nilai tersimpan jika ada
+        if ($this->Status === 'CLOSED' && 
+            isset($this->open_duration_seconds) && 
+            isset($this->pending_duration_seconds) && 
+            isset($this->total_duration_seconds) &&
+            $this->open_duration_seconds > 0) {
+            
+            Log::debug('getCurrentTimer for CLOSED ticket - using stored values', [
+                'ticket' => $this->No_Ticket,
+                'open_duration_seconds' => $this->open_duration_seconds,
+                'pending_duration_seconds' => $this->pending_duration_seconds,
+                'total_duration_seconds' => $this->total_duration_seconds,
+            ]);
+            
+            return [
+                'open' => ['seconds' => $this->open_duration_seconds],
+                'pending' => ['seconds' => $this->pending_duration_seconds],
+                'total' => ['seconds' => $this->total_duration_seconds],
+            ];
+        }
+        
+        // Gunakan waktu sekarang atau waktu tutup
+        $now = $useClosedTime && $this->Closed_Time ? $this->Closed_Time->getTimestamp() : now()->getTimestamp();
         $openSeconds = 0;
         $pendingSeconds = 0;
 
@@ -263,12 +319,12 @@ class Ticket extends Model
             }
 
             // Kurangi total pending dari open seconds
-            $openSeconds = max(0, $openSeconds - ($this->pending_duration_seconds ?? 0));
+            $openSeconds = max(0, $openSeconds - $pendingSeconds);
         }
 
         $totalSeconds = $openSeconds + $pendingSeconds;
 
-        Log::debug('getCurrentTimer result', [
+        Log::debug('getCurrentTimer calculation result', [
             'ticket' => $this->No_Ticket,
             'openSeconds' => $openSeconds,
             'pendingSeconds' => $pendingSeconds,
@@ -277,6 +333,7 @@ class Ticket extends Model
             'pending_duration_seconds' => $this->pending_duration_seconds ?? 0,
             'Pending_Start' => $this->Pending_Start?->timestamp,
             'now' => $now,
+            'useClosedTime' => $useClosedTime,
         ]);
 
         return [
@@ -288,6 +345,11 @@ class Ticket extends Model
 
     public function getTotalDurationAttribute()
     {
+        // PERBAIKAN: Jika tiket sudah ditutup dan ada nilai tersimpan, gunakan itu
+        if ($this->Status === 'CLOSED' && isset($this->total_duration_seconds) && $this->total_duration_seconds > 0) {
+            return $this->total_duration_seconds;
+        }
+        
         return $this->getOpenDurationAttribute() + $this->getPendingDurationAttribute();
     }
 
@@ -321,8 +383,6 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'Closed_By', 'id');
     }
 
-    
-
     public function actions()
     {
         return $this->hasMany(TicketAction::class, 'No_Ticket', 'No_Ticket');
@@ -330,78 +390,92 @@ class Ticket extends Model
 
     // Method to update an action (for EditActionModal)
     public function updateAction($actionId, array $data)
-{
-    if (!isset($data['action_taken']) || !isset($data['action_description'])) {
-        throw new \Exception('Action Taken dan Action Description harus diisi.');
-    }
-
-    $action = $this->actions()->findOrFail($actionId);
-    $oldActionTaken = $action->Action_Taken;
-    $newActionTaken = $data['action_taken'];
-
-    // Simpan level user yang melakukan aksi
-    $userLevel = Auth::user()->Level ?? 'Level 1';
-
-    // Jika ini adalah aksi eskalsi, ambil level tujuan dari data (misalnya)
-    $escalationTargetLevel = null;
-    if ($newActionTaken === 'Escalation' && isset($data['escalation_level'])) {
-        $escalationTargetLevel = $data['escalation_level']; // Level tujuan eskalsi
-    }
-
-    // Update data action
-    $action->update([
-        'Action_Taken' => $newActionTaken,
-        'Action_Description' => $data['action_description'],
-        'Action_Time' => now(),
-        'Action_By' => Auth::user()->name,
-        'Action_Level' => $userLevel, // Selalu gunakan level user
-        'Escalation_Target_Level' => $escalationTargetLevel, // Simpan level tujuan jika ada
-    ]);
-
-    // Logika untuk memperbarui status ticket
-    if ($oldActionTaken !== $newActionTaken) {
-        switch ($newActionTaken) {
-            case 'Pending Clock':
-                $this->Status = self::STATUS_PENDING;
-                $this->Pending_Reason = $data['action_description'];
-                break;
-
-            case 'Start Clock':
-                $this->Status = self::STATUS_OPEN;
-                break;
-
-            case 'Closed':
-                if (empty(trim($data['action_description']))) {
-                    throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
-                }
-                $this->Status = self::STATUS_CLOSED;
-                $this->Action_Summry = $data['action_description'];
-                break;
-
-            case 'Note':
-                break;
-
-            case 'Escalation':
-                // Update Current_Escalation_Level pada ticket
-                if ($escalationTargetLevel) {
-                    $this->Current_Escalation_Level = $escalationTargetLevel;
-                }
-                break;
-
-            default:
-                throw new \Exception('Action Taken tidak valid: ' . $newActionTaken);
+    {
+        if (!isset($data['action_taken']) || !isset($data['action_description'])) {
+            throw new \Exception('Action Taken dan Action Description harus diisi.');
         }
 
-        $this->save();
+        $action = $this->actions()->findOrFail($actionId);
+        $oldActionTaken = $action->Action_Taken;
+        $newActionTaken = $data['action_taken'];
+
+        // Simpan level user yang melakukan aksi
+        $userLevel = Auth::user()->Level ?? 'Level 1';
+
+        // Jika ini adalah aksi eskalsi, ambil level tujuan dari data (misalnya)
+        $escalationTargetLevel = null;
+        if ($newActionTaken === 'Escalation' && isset($data['escalation_level'])) {
+            $escalationTargetLevel = $data['escalation_level']; // Level tujuan eskalsi
+        }
+
+        // Update data action
+        $action->update([
+            'Action_Taken' => $newActionTaken,
+            'Action_Description' => $data['action_description'],
+            'Action_Time' => now(),
+            'Action_By' => Auth::user()->name,
+            'Action_Level' => $userLevel, // Selalu gunakan level user
+            'Escalation_Target_Level' => $escalationTargetLevel, // Simpan level tujuan jika ada
+        ]);
+
+        // Logika untuk memperbarui status ticket
+        if ($oldActionTaken !== $newActionTaken) {
+            switch ($newActionTaken) {
+                case 'Pending Clock':
+                    $this->Status = self::STATUS_PENDING;
+                    $this->Pending_Reason = $data['action_description'];
+                    break;
+
+                case 'Start Clock':
+                    $this->Status = self::STATUS_OPEN;
+                    break;
+
+                case 'Closed':
+                    if (empty(trim($data['action_description']))) {
+                        throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
+                    }
+                    
+                    // PERBAIKAN: Simpan nilai timer sebelum menutup tiket
+                    $currentTimer = $this->getCurrentTimer(true);
+                    $this->open_duration_seconds = $currentTimer['open']['seconds'];
+                    $this->pending_duration_seconds = $currentTimer['pending']['seconds'];
+                    $this->total_duration_seconds = $currentTimer['total']['seconds'];
+                    
+                    $this->Status = self::STATUS_CLOSED;
+                    $this->Action_Summry = $data['action_description'];
+                    
+                    Log::debug('Closing ticket with final timer values', [
+                        'ticket' => $this->No_Ticket,
+                        'open_duration_seconds' => $this->open_duration_seconds,
+                        'pending_duration_seconds' => $this->pending_duration_seconds,
+                        'total_duration_seconds' => $this->total_duration_seconds,
+                    ]);
+                    break;
+
+                case 'Note':
+                    break;
+
+                case 'Escalation':
+                    // Update Current_Escalation_Level pada ticket
+                    if ($escalationTargetLevel) {
+                        $this->Current_Escalation_Level = $escalationTargetLevel;
+                    }
+                    break;
+
+                default:
+                    throw new \Exception('Action Taken tidak valid: ' . $newActionTaken);
+            }
+
+            $this->save();
+        }
+
+        Log::info("Action updated for ticket: {$this->No_Ticket}, Action ID: {$actionId}", [
+            'Action_Taken' => $newActionTaken,
+            'Action_Description' => $data['action_description'],
+        ]);
+
+        return $action;
     }
-
-    Log::info("Action updated for ticket: {$this->No_Ticket}, Action ID: {$actionId}", [
-        'Action_Taken' => $newActionTaken,
-        'Action_Description' => $data['action_description'],
-    ]);
-
-    return $action;
-}
 
     // Helpers
     public function isOpen(): bool { return $this->Status === self::STATUS_OPEN; }

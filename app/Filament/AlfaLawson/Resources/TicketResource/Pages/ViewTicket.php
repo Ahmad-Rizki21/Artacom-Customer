@@ -47,7 +47,15 @@ class ViewTicket extends ViewRecord
                     'Status' => 'CLOSED',
                     'Closed_Time' => now(),
                     'Action_Summry' => $data['new_action_description'],
+                    // TAMBAHAN: Mengisi Problem_Summary saat tiket ditutup
+                    'Problem_Summary' => $data['new_action_description'],
                 ];
+                
+                // Pastikan durasi timer tersimpan saat ditutup
+                $currentTimer = $this->record->getCurrentTimer(true);
+                $updateData['open_duration_seconds'] = $currentTimer['open']['seconds'];
+                $updateData['pending_duration_seconds'] = $currentTimer['pending']['seconds'];
+                $updateData['total_duration_seconds'] = $currentTimer['total']['seconds'];
             }
 
             if (!empty($updateData)) {
@@ -211,13 +219,44 @@ class ViewTicket extends ViewRecord
                             'Closed' => 'Closed',
                             'Note' => 'Note',
                         ])
-                        ->required(),
+                        ->required()
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, \Filament\Forms\Set $set) {
+                            if ($state === 'Closed') {
+                                $set('show_problem_summary', true);
+                            } else {
+                                $set('show_problem_summary', false);
+                            }
+                        }),
                     Textarea::make('new_action_description')
                         ->label('Description')
                         ->required()
                         ->rows(3),
+                    Textarea::make('problem_summary')
+                        ->label('Problem Summary')
+                        ->helperText('Ringkasan teknis masalah (untuk penggunaan internal)')
+                        ->rows(3)
+                        ->hidden(fn (\Filament\Forms\Get $get) => $get('new_action_status') !== 'Closed')
+                        ->afterStateHydrated(function (\Filament\Forms\Set $set, \Filament\Forms\Get $get) {
+                            // Copy dari action description jika kosong
+                            if (empty($get('problem_summary')) && !empty($get('new_action_description'))) {
+                                $set('problem_summary', $get('new_action_description'));
+                            }
+                        }),
                 ])
-                ->action(fn (array $data) => $this->addAction($data))
+                ->action(function (array $data) {
+                    // Jika ada problem_summary yang diisi, gunakan itu
+                    // Jika tidak, gunakan action_description
+                    if ($data['new_action_status'] === 'Closed') {
+                        if (!empty($data['problem_summary'])) {
+                            // Update variabel data dengan problem_summary yang akan dikirim ke addAction
+                            $data['problem_summary_value'] = $data['problem_summary'];
+                        } else {
+                            $data['problem_summary_value'] = $data['new_action_description'];
+                        }
+                    }
+                    $this->addAction($data);
+                })
                 ->modalSubmitActionLabel('Submit')
                 ->extraAttributes(['wire:submit.prevent' => 'addAction']),
             Actions\Action::make('downloadPdf')
@@ -237,64 +276,65 @@ class ViewTicket extends ViewRecord
     }
 
     public function escalateTicket(array $data): void
-{
-    try {
-        // Validate data is present (though Filament form should handle this)
-        if (empty($data['escalation_level']) || empty($data['escalation_description'])) {
-            throw new \Exception('Escalation level and description are required.');
+    {
+        try {
+            // Validate data is present (though Filament form should handle this)
+            if (empty($data['escalation_level']) || empty($data['escalation_description'])) {
+                throw new \Exception('Escalation level and description are required.');
+            }
+
+            $levelOrder = [
+                'Level 1' => ['order' => 1, 'role' => 'NOC'],
+                'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
+                'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
+                'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
+                'Level 5' => ['order' => 5, 'role' => 'Engineer'],
+                'Level 6' => ['order' => 6, 'role' => 'Management'],
+            ];
+
+            $currentUserLevel = Auth::user()->Level ?? 'Level 1';
+            $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
+
+            // Validate the selected escalation level
+            if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentUserLevel]['order'] ?? 1)) {
+                throw new \Exception('Cannot escalate to a level lower than or equal to your current level.');
+            }
+
+            if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentEscalationLevel]['order'] ?? 1)) {
+                throw new \Exception('Cannot escalate to a level lower than or equal to the current escalation level.');
+            }
+
+            // Update ticket
+            $this->record->update([
+                'Current_Escalation_Level' => $data['escalation_level'],
+            ]);
+
+            // Create action history with the user's level, not the escalation level
+            TicketAction::create([
+                'No_Ticket' => $this->record->No_Ticket,
+                'Action_Taken' => 'Escalation',
+                'Action_Time' => now(),
+                'Action_By' => Auth::user()->name,
+                'Action_Level' => Auth::user()->Level ?? 'Level 1', // Gunakan level user yang melakukan aksi
+                'Action_Description' => $data['escalation_description'] . "\nEscalated to: " . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']),
+            ]);
+
+            Notification::make()
+                ->success()
+                ->title('Ticket Escalated')
+                ->body('Ticket has been escalated to ' . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']))
+                ->send();
+
+            $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Escalation Failed')
+                ->body($e->getMessage())
+                ->send();
         }
-
-        $levelOrder = [
-            'Level 1' => ['order' => 1, 'role' => 'NOC'],
-            'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
-            'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
-            'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
-            'Level 5' => ['order' => 5, 'role' => 'Engineer'],
-            'Level 6' => ['order' => 6, 'role' => 'Management'],
-        ];
-
-        $currentUserLevel = Auth::user()->Level ?? 'Level 1';
-        $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
-
-        // Validate the selected escalation level
-        if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentUserLevel]['order'] ?? 1)) {
-            throw new \Exception('Cannot escalate to a level lower than or equal to your current level.');
-        }
-
-        if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentEscalationLevel]['order'] ?? 1)) {
-            throw new \Exception('Cannot escalate to a level lower than or equal to the current escalation level.');
-        }
-
-        // Update ticket
-        $this->record->update([
-            'Current_Escalation_Level' => $data['escalation_level'],
-        ]);
-
-        // Create action history with the user's level, not the escalation level
-        TicketAction::create([
-            'No_Ticket' => $this->record->No_Ticket,
-            'Action_Taken' => 'Escalation',
-            'Action_Time' => now(),
-            'Action_By' => Auth::user()->name,
-            'Action_Level' => Auth::user()->Level ?? 'Level 1', // Gunakan level user yang melakukan aksi
-            'Action_Description' => $data['escalation_description'] . "\nEscalated to: " . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']),
-        ]);
-
-        Notification::make()
-            ->success()
-            ->title('Ticket Escalated')
-            ->body('Ticket has been escalated to ' . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']))
-            ->send();
-
-        $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
-    } catch (\Exception $e) {
-        Notification::make()
-            ->danger()
-            ->title('Escalation Failed')
-            ->body($e->getMessage())
-            ->send();
     }
-}
+    
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');
@@ -392,6 +432,10 @@ class ViewTicket extends ViewRecord
                                         TextEntry::make('Tlp_Pic')
                                             ->label('PIC Phone')
                                             ->getStateUsing(fn ($record) => $record->Tlp_Pic ?? '-'),
+                                        TextEntry::make('Problem_Summary')
+                                            ->label('Problem Summary')
+                                            ->default('-')
+                                            ->columnSpanFull(),
                                     ])
                                     ->columns(2),
 

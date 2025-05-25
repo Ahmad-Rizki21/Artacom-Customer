@@ -15,7 +15,11 @@ use Maatwebsite\Excel\Concerns\WithCustomStartCell;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class TicketExport implements 
     FromCollection, 
@@ -27,10 +31,24 @@ class TicketExport implements
     WithCustomStartCell
 {
     protected $tickets;
+    protected $includeHeader = true;
+    protected $filterStatus = null;
+    protected $dateFrom = null;
+    protected $dateTo = null;
+    protected $title = 'Laporan Ticket Problem PT. Artacomindo';
+    protected $subtitle = null;
 
-    public function __construct(?Collection $tickets = null)
+    public function __construct(?Collection $tickets = null, $options = [])
     {
         $this->tickets = $tickets ?? Ticket::all();
+        
+        // Opsi tambahan
+        $this->includeHeader = $options['includeHeader'] ?? true;
+        $this->filterStatus = $options['filterStatus'] ?? null;
+        $this->dateFrom = $options['dateFrom'] ?? null;
+        $this->dateTo = $options['dateTo'] ?? null;
+        $this->title = $options['title'] ?? $this->title;
+        $this->subtitle = $options['subtitle'] ?? null;
     }
 
     public function collection()
@@ -49,15 +67,19 @@ class TicketExport implements
             'Kategori Pelaporan',
             'Problem Summary',
             'Status Ticket',
+            'Open Level',          // Tambahkan kolom untuk Open Level
+            'Escalation Level',    // Tambahkan kolom untuk Level Eskalasi
             'Open Date',
             'Pending Date',
             'Closed Date',
-            'Pending Reason',           // Tambahkan kolom untuk Pending Reason
+            'Pending Reason',
             'Action Description',
+            'PIC',                 // Tambahkan kolom untuk PIC
+            'Reported By',         // Tambahkan kolom untuk Reported By
             'Open Clock',
             'Total Pending',
             'Total Duration',
-            'Downtime',                 // Downtime = Total Duration - Total Pending
+            'Downtime',
         ];
     }
 
@@ -88,8 +110,108 @@ class TicketExport implements
             $pendingReason = substr($pendingReason, 0, 147) . '...';
         }
 
+        // Ambil informasi eskalasi dari model Ticket
+        $currentEscalation = $ticket->Current_Escalation_Level ?? '-';
+        $escalationLevel = '-';
+        $escalationTitle = '-';
+        
+        // Jika tidak ada nilai eskalasi di model, coba ambil dari aksi-aksi terkait
+        if ($currentEscalation === '-' || empty($currentEscalation)) {
+            try {
+                // Cari aksi eskalasi terbaru
+                $escalationAction = TicketAction::where('No_Ticket', $ticket->No_Ticket)
+                    ->where('Action_Taken', 'Escalation')
+                    ->orderBy('Action_Time', 'desc')
+                    ->first();
+                
+                if ($escalationAction) {
+                    // Cek jika ada "To: " dalam deskripsi action
+                    if (strpos($escalationAction->Action_Description, 'To: ') !== false) {
+                        preg_match('/To: (.+)/', $escalationAction->Action_Description, $matches);
+                        if (isset($matches[1])) {
+                            $currentEscalation = $matches[1];
+                        }
+                    } else {
+                        // Coba ambil dari kolom Escalation_Target_Level jika ada
+                        $currentEscalation = $escalationAction->Escalation_Target_Level ?? $currentEscalation;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Error getting escalation info for ticket {$ticket->No_Ticket}: " . $e->getMessage());
+            }
+        }
+        
+        // Format tampilan eskalasi dengan format "Level - Jabatan"
+        if ($currentEscalation !== '-' && !empty($currentEscalation)) {
+            // Petakan nilai eskalasi ke format yang diinginkan
+            switch (strtolower(trim($currentEscalation))) {
+                case 'management':
+                    $escalationLevel = 'Level 6';
+                    $escalationTitle = 'Management';
+                    $currentEscalation = 'Level 6 - Management';
+                    break;
+                    
+                case 'high-admin':
+                case 'high admin':
+                    $escalationLevel = 'Level 2';
+                    $escalationTitle = 'SPV NOC';
+                    $currentEscalation = 'Level 2 - SPV NOC';
+                    break;
+                    
+                case 'noc':
+                    $escalationLevel = 'Level 1';
+                    $escalationTitle = 'NOC';
+                    $currentEscalation = 'Level 1 - NOC';
+                    break;
+                    
+                case 'teknisi':
+                    $escalationLevel = 'Level 3';
+                    $escalationTitle = 'Teknisi';
+                    $currentEscalation = 'Level 3 - Teknisi';
+                    break;
+                    
+                case 'spv teknisi':
+                    $escalationLevel = 'Level 4';
+                    $escalationTitle = 'SPV Teknisi';
+                    $currentEscalation = 'Level 4 - SPV Teknisi';
+                    break;
+                    
+                case 'engineer':
+                    $escalationLevel = 'Level 5';
+                    $escalationTitle = 'Engineer';
+                    $currentEscalation = 'Level 5 - Engineer';
+                    break;
+                    
+                default:
+                    // Jika formatnya sudah "Level X - Jabatan", pertahankan
+                    if (strpos($currentEscalation, ' - ') !== false) {
+                        list($escalationLevel, $escalationTitle) = explode(' - ', $currentEscalation, 2);
+                    } 
+                    // Jika hanya angka level, tambahkan format
+                    else if (preg_match('/level\s*(\d+)/i', $currentEscalation, $matches)) {
+                        $escalationLevel = 'Level ' . $matches[1];
+                        $escalationTitle = $this->getLevelTitle($matches[1]);
+                        $currentEscalation = $escalationLevel . ' - ' . $escalationTitle;
+                    }
+                    // Jika hanya jabatan, cari level yang sesuai
+                    else {
+                        $level = $this->getLevelFromRole($currentEscalation);
+                        if ($level > 0) {
+                            $escalationLevel = 'Level ' . $level;
+                            $escalationTitle = $currentEscalation;
+                            $currentEscalation = $escalationLevel . ' - ' . $escalationTitle;
+                        } else {
+                            // Jika bukan format yang dikenal, gunakan apa adanya
+                            $escalationLevel = 'Level';
+                            $escalationTitle = $currentEscalation;
+                            $currentEscalation = 'Level - ' . $currentEscalation;
+                        }
+                    }
+                    break;
+            }
+        }
+
         // Gunakan nilai tersimpan dalam database jika tersedia
-        // Ini memastikan nilai akurat bahkan setelah tiket ditutup
         $openDurationSeconds = $ticket->open_duration_seconds ?? 0;
         $totalPendingSeconds = $ticket->pending_duration_seconds ?? 0;
         $totalDurationSeconds = $ticket->total_duration_seconds ?? 0;
@@ -117,29 +239,13 @@ class TicketExport implements
         }
 
         // Calculate downtime in seconds (Total Duration - Total Pending)
-        // Downtime adalah waktu tiket aktif (tidak termasuk waktu pending)
         $downtimeSeconds = max(0, $totalDurationSeconds - $totalPendingSeconds);
         
-        // Atau, jika Downtime adalah sama dengan Open Duration:
-        // $downtimeSeconds = $openDurationSeconds;
-
         // Format semua durasi ke format HH:MM:SS
         $openDurationFormatted = $this->formatDuration($openDurationSeconds);
         $totalPendingFormatted = $this->formatDuration($totalPendingSeconds);
         $totalDurationFormatted = $this->formatDuration($totalDurationSeconds);
         $downtimeFormatted = $this->formatDuration($downtimeSeconds);
-
-        // Log untuk debugging
-        Log::info("Ticket {$ticket->No_Ticket} Export Durations", [
-            'open_duration_seconds' => $openDurationSeconds,
-            'pending_duration_seconds' => $totalPendingSeconds,
-            'total_duration_seconds' => $totalDurationSeconds,
-            'downtime_seconds' => $downtimeSeconds,
-            'open_formatted' => $openDurationFormatted,
-            'pending_formatted' => $totalPendingFormatted,
-            'total_formatted' => $totalDurationFormatted,
-            'downtime_formatted' => $downtimeFormatted,
-        ]);
 
         return [
             $ticket->No_Ticket ?? '-',
@@ -150,15 +256,19 @@ class TicketExport implements
             $ticket->Catagory ?? '-',
             $ticket->Problem_Summary ?? '-',
             $ticket->Status ?? '-',
+            $ticket->Open_Level ?? '-',           // Tambahkan Open Level
+            $currentEscalation,                   // Tambahkan Escalation Level
             optional($ticket->Open_Time)->format('d/m/Y H:i:s') ?? '-',
             optional($ticket->Pending_Start)->format('d/m/Y H:i:s') ?? '-',
             optional($ticket->Closed_Time)->format('d/m/Y H:i:s') ?? '-',
-            $pendingReason,  // Pending Reason
+            $pendingReason,
             $latestAction->Action_Description ?? '-',
-            $openDurationFormatted, // Open Clock (Formatted)
-            $totalPendingFormatted, // Total Pending (Formatted)
-            $totalDurationFormatted, // Total Duration (Formatted)
-            $downtimeFormatted, // Downtime (Formatted)
+            $ticket->Pic ?? '-',                 // Tambahkan PIC
+            $ticket->Reported_By ?? '-',         // Tambahkan Reported By
+            $openDurationFormatted,
+            $totalPendingFormatted,
+            $totalDurationFormatted,
+            $downtimeFormatted,
         ];
     }
 
@@ -173,15 +283,19 @@ class TicketExport implements
             'F' => 20, // Kategori Pelaporan
             'G' => 30, // Problem Summary
             'H' => 15, // Status Ticket
-            'I' => 20, // Open Date
-            'J' => 20, // Pending Date
-            'K' => 20, // Closed Date
-            'L' => 30, // Pending Reason
-            'M' => 30, // Action Description
-            'N' => 15, // Open Clock
-            'O' => 15, // Total Pending
-            'P' => 15, // Total Duration
-            'Q' => 15, // Downtime
+            'I' => 15, // Open Level
+            'J' => 20, // Escalation Level
+            'K' => 20, // Open Date
+            'L' => 20, // Pending Date
+            'M' => 20, // Closed Date
+            'N' => 30, // Pending Reason
+            'O' => 30, // Action Description
+            'P' => 15, // PIC
+            'Q' => 15, // Reported By
+            'R' => 15, // Open Clock
+            'S' => 15, // Total Pending
+            'T' => 15, // Total Duration
+            'U' => 15, // Downtime
         ];
     }
 
@@ -192,8 +306,12 @@ class TicketExport implements
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->mergeCells('A1:Q1');
-        $sheet->setCellValue('A1', 'Laporan Ticket Problem PT. Artacomindo');
+        // Hitung jumlah kolom (A sampai U = 21 kolom)
+        $lastColumn = 'U';
+        
+        // Header judul laporan
+        $sheet->mergeCells("A1:{$lastColumn}1");
+        $sheet->setCellValue('A1', $this->title);
         $sheet->getStyle('A1')->applyFromArray([
             'font' => [
                 'bold' => true,
@@ -201,85 +319,218 @@ class TicketExport implements
                 'color' => ['argb' => 'FF000000'],
             ],
             'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFEEF2FF'], // Warna latar belakang soft blue
+            ],
+            'borders' => [
+                'bottom' => [
+                    'borderStyle' => Border::BORDER_MEDIUM,
+                    'color' => ['argb' => 'FF4A90E2'],
+                ],
             ],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(30);
 
-        $sheet->mergeCells('A2:Q2');
-        $sheet->setCellValue('A2', 'Periode: ' . now()->format('d/m/Y H:i:s'));
+        // Sub-header (periode atau informasi tambahan)
+        $sheet->mergeCells("A2:{$lastColumn}2");
+        $periodText = 'Periode: ' . Carbon::now()->format('d/m/Y H:i:s');
+        if ($this->subtitle) {
+            $periodText = $this->subtitle;
+        } elseif ($this->dateFrom && $this->dateTo) {
+            $periodText = 'Periode: ' . Carbon::parse($this->dateFrom)->format('d/m/Y') . ' s/d ' . Carbon::parse($this->dateTo)->format('d/m/Y');
+        }
+        
+        $sheet->setCellValue('A2', $periodText);
         $sheet->getStyle('A2')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 12,
-                'color' => ['argb' => 'FF000000'],
+                'color' => ['argb' => 'FF4A4A4A'], // Dark gray
             ],
             'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFF8F9FA'], // Light gray
             ],
         ]);
         $sheet->getRowDimension(2)->setRowHeight(25);
+        
+        // Baris kosong untuk jarak
+        $sheet->mergeCells("A3:{$lastColumn}3");
+        $sheet->getRowDimension(3)->setRowHeight(10);
 
-        $sheet->getStyle('A4:Q4')->applyFromArray([
+        // Header tabel
+        $sheet->getStyle("A4:{$lastColumn}4")->applyFromArray([
             'font' => [
                 'bold' => true,
                 'size' => 12,
-                'color' => ['argb' => 'FFFFFFFF'],
+                'color' => ['argb' => 'FFFFFFFF'], // White
             ],
             'fill' => [
-                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FF4A90E2'],
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FF4A90E2'], // Blue
             ],
             'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
                 'wrapText' => true,
             ],
             'borders' => [
                 'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'borderStyle' => Border::BORDER_THIN,
                     'color' => ['argb' => 'FF000000'],
                 ],
             ],
         ]);
         $sheet->getRowDimension(4)->setRowHeight(30);
 
+        // Membuat baris-baris data menjadi bergaris dan selang-seling warna
         $highestRow = $sheet->getHighestRow();
-        $sheet->getStyle("A5:Q{$highestRow}")->applyFromArray([
+        $sheet->getStyle("A5:{$lastColumn}{$highestRow}")->applyFromArray([
             'alignment' => [
-                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
                 'wrapText' => true,
             ],
             'borders' => [
                 'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'borderStyle' => Border::BORDER_THIN,
                     'color' => ['argb' => 'FF000000'],
                 ],
             ],
         ]);
 
+        // Khusus kolom Problem Summary dan Action Description, rata kiri
+        $sheet->getStyle("G5:G{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle("O5:O{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle("N5:N{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+        // Styling setiap baris dengan warna selang-seling dan status warna
         for ($row = 5; $row <= $highestRow; $row++) {
+            // Zebra striping (baris selang-seling)
             if (($row % 2) === 0) {
-                $sheet->getStyle("A{$row}:Q{$row}")->applyFromArray([
+                $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
                     'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['argb' => 'FFF2F2F2'],
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FFF2F2F2'], // Light gray
+                    ],
+                ]);
+            } else {
+                $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FFFFFFFF'], // White
                     ],
                 ]);
             }
 
+            // Warna status ticket
             $status = $sheet->getCell("H{$row}")->getValue();
-            $color = match ($status) {
-                'CLOSED' => new Color('FF00FF00'),
-                'OPEN' => new Color('FF0000FF'),
-                'PENDING' => new Color('FFFFFF00'),
-                default => new Color('FF000000'),
+            $statusColor = match ($status) {
+                'CLOSED' => 'FF00B050', // Green
+                'OPEN' => 'FF0070C0',   // Blue
+                'PENDING' => 'FFFFC000', // Yellow/Orange
+                default => 'FF000000',   // Black
             };
-            $sheet->getStyle("H{$row}")->getFont()->setColor($color);
+            
+            $sheet->getStyle("H{$row}")->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                    'color' => ['argb' => 'FFFFFFFF'], // White text
+                ],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['argb' => $statusColor],
+                ],
+            ]);
+            
+            // Warna eskalasi jika ada
+            $escalation = $sheet->getCell("J{$row}")->getValue();
+            if ($escalation && $escalation !== '-') {
+                // Ekstrak level dari format "Level X - Jabatan"
+                $levelMatch = [];
+                preg_match('/Level\s*(\d+)/i', $escalation, $levelMatch);
+                $level = isset($levelMatch[1]) ? (int)$levelMatch[1] : 0;
+                
+                // Warna berdasarkan level
+                $escalationColor = match ($level) {
+                    1 => 'FF00B0F0',    // Light Blue for Level 1 (NOC)
+                    2 => 'FF0070C0',    // Dark Blue for Level 2 (SPV NOC)
+                    3 => 'FF92D050',    // Light Green for Level 3 (Teknisi)
+                    4 => 'FF00B050',    // Dark Green for Level 4 (SPV Teknisi)
+                    5 => 'FFFFC000',    // Yellow/Gold for Level 5 (Engineer)
+                    6 => 'FFFF0000',    // Red for Level 6 (Management)
+                    default => 'FFC0C0C0',  // Grey for others
+                };
+                
+                // Warna alternatif berdasarkan jabatan jika level tidak terdeteksi
+                if ($level === 0) {
+                    $escalationColor = match (true) {
+                        str_contains(strtolower($escalation), 'noc') && !str_contains(strtolower($escalation), 'spv') => 'FF00B0F0',      // Light Blue
+                        str_contains(strtolower($escalation), 'spv noc') => 'FF0070C0',   // Dark Blue
+                        str_contains(strtolower($escalation), 'teknisi') && !str_contains(strtolower($escalation), 'spv') => 'FF92D050',  // Light Green
+                        str_contains(strtolower($escalation), 'spv teknisi') => 'FF00B050', // Dark Green
+                        str_contains(strtolower($escalation), 'engineer') => 'FFFFC000',   // Yellow
+                        str_contains(strtolower($escalation), 'management') => 'FFFF0000', // Red
+                        default => 'FFC0C0C0',   // Grey
+                    };
+                }
+                
+                $sheet->getStyle("J{$row}")->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['argb' => 'FF000000'], // Black text
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => $escalationColor],
+                    ],
+                ]);
+            }
         }
+        
+        // Tambahkan baris jumlah/ringkasan di bagian bawah
+        $summaryRow = $highestRow + 2;
+        $sheet->mergeCells("A{$summaryRow}:G{$summaryRow}");
+        $sheet->setCellValue("A{$summaryRow}", "Total Tickets: " . ($highestRow - 4));
+        $sheet->getStyle("A{$summaryRow}:G{$summaryRow}")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'size' => 12,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFF2F2F2'],
+            ],
+            'borders' => [
+                'outline' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF000000'],
+                ],
+            ],
+        ]);
+        
+        // Tampilkan footer atau info tambahan
+        $footerRow = $summaryRow + 2;
+        $sheet->mergeCells("A{$footerRow}:{$lastColumn}{$footerRow}");
+        $sheet->setCellValue("A{$footerRow}", "Laporan dihasilkan pada: " . Carbon::now()->format('d/m/Y H:i:s') . " oleh PT. Artacomindo");
+        $sheet->getStyle("A{$footerRow}:{$lastColumn}{$footerRow}")->applyFromArray([
+            'font' => [
+                'italic' => true,
+                'size' => 10,
+                'color' => ['argb' => 'FF808080'], // Gray
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+            ],
+        ]);
     }
 
     public function registerEvents(): array
@@ -287,10 +538,74 @@ class TicketExport implements
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $event->sheet->freezePane('A5');
+                
+                // Otomatis menyesuaikan lebar kolom berdasarkan konten
+                // Tapi tetap harus mempertimbangkan batas minimum dan maksimum
+                foreach ($this->columnWidths() as $column => $minWidth) {
+                    $currentWidth = $event->sheet->getColumnDimension($column)->getWidth();
+                    $calculatedWidth = min(50, max($minWidth, $currentWidth)); // Min 15, max 50
+                    $event->sheet->getColumnDimension($column)->setWidth($calculatedWidth);
+                }
+                
+                // Tambahkan header dan footer khusus
+                $event->sheet->getHeaderFooter()
+                    ->setOddHeader('&L&B' . $this->title . '&R&D')
+                    ->setOddFooter('&L&B' . $this->title . '&RPage &P of &N');
+                
+                // Atur pengaturan cetak
+                $event->sheet->getPageSetup()
+                    ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+                    ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+                    ->setFitToPage(true)
+                    ->setFitToWidth(1)
+                    ->setFitToHeight(0);
+                
+                // Set judul cetak
+                $event->sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(4, 4);
             },
         ];
     }
 
+    /**
+     * Mendapatkan judul jabatan berdasarkan level
+     * 
+     * @param int|string $level
+     * @return string
+     */
+    private function getLevelTitle($level)
+    {
+        // Mapping level ke jabatan sesuai struktur organisasi
+        $level = (int)$level;
+        return match ($level) {
+            1 => 'NOC',
+            2 => 'SPV NOC',
+            3 => 'Teknisi',
+            4 => 'SPV Teknisi',
+            5 => 'Engineer',
+            6 => 'Management',
+            default => 'Staff',
+        };
+    }
+    
+    /**
+     * Mendapatkan informasi level dari jabatan
+     * 
+     * @param string $role
+     * @return int
+     */
+    private function getLevelFromRole($role)
+    {
+        return match (strtolower(trim($role))) {
+            'noc' => 1,
+            'spv noc' => 2,
+            'teknisi' => 3,
+            'spv teknisi' => 4,
+            'engineer' => 5,
+            'management' => 6,
+            default => 0,
+        };
+    }
+    
     private function parseDurationToSeconds(string $duration = '00:00:00'): int
     {
         // Validasi format dan berikan nilai default jika tidak valid
@@ -319,7 +634,7 @@ class TicketExport implements
         
         return ($hours * 3600) + ($minutes * 60) + $seconds;
     }
-
+    
     private function formatDuration(int $seconds): string
     {
         if ($seconds < 0) {

@@ -28,6 +28,8 @@ use App\Filament\AlfaLawson\Widgets\DCMapWidget;
 use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
 use Rmsramos\Activitylog\ActivitylogPlugin;
+use Joaopaulolndev\FilamentEditProfile\FilamentEditProfilePlugin;
+use Devonab\FilamentEasyFooter\EasyFooterPlugin;
 
 class AlfaPanelProvider extends PanelProvider
 {
@@ -38,7 +40,6 @@ class AlfaPanelProvider extends PanelProvider
             ->id('alfa')
             ->path('alfa')
             ->login()
-            ->profile()
             ->colors([
                 'danger' => Color::Rose,
                 'gray' => Color::Gray,
@@ -153,10 +154,22 @@ class AlfaPanelProvider extends PanelProvider
             )
             ->plugins([
                 
+                EasyFooterPlugin::make()
+                    ->withBorder()
+                    ->withLogo(
+                        'https://ajnusa.com/images/artacom.png',
+                        'https://ajnusa.com/'
+                    )
+                    ->withLinks([
+                        ['title' => 'Ahmad Rizki', 'url' => 'https://www.instagram.com/amad.dyk/'],
+                    ])
+                    ->withLoadTime('This page loaded in'),
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
                 FilamentBackgroundsPlugin::make()
                 ->showAttribution(false),
-                FilamentApexChartsPlugin::make()
+                FilamentApexChartsPlugin::make(),
+                FilamentEditProfilePlugin::make()
+        
             ]);
             
     }

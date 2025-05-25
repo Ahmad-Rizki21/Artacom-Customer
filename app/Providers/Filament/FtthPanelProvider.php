@@ -17,6 +17,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Joaopaulolndev\FilamentEditProfile\FilamentEditProfilePlugin;
 use Filament\Navigation\NavigationItem;
 
 class FTTHPanelProvider extends PanelProvider
@@ -89,7 +90,7 @@ class FTTHPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->plugins([
-
+                FilamentEditProfilePlugin::make()
             ]);
             
     }

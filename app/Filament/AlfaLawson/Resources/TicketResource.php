@@ -863,42 +863,42 @@ class TicketResource extends Resource
     }
 
     protected function saveEvidenceFiles(Model $record, $files): void
-{
-    if (!$files) return;
+    {
+        if (!$files) return;
 
-    Log::debug('saveEvidenceFiles called', [
-        'ticket' => $record->No_Ticket,
-        'files_count' => count($files),
-        'files' => array_map(fn($file) => $file->getClientOriginalName(), $files),
-    ]);
-
-    $evidenceService = app(EvidenceService::class);
-    $files = is_array($files) ? $files : [$files];
-
-    $result = $evidenceService->uploadFiles($record->No_Ticket, $files, [
-        'upload_stage' => TicketEvidence::STAGE_INITIAL,
-        'description' => null,
-    ]);
-
-    if ($result['success_count'] > 0) {
-        Log::info('Evidence files uploaded via TicketResource', [
+        Log::debug('saveEvidenceFiles called', [
             'ticket' => $record->No_Ticket,
-            'uploaded_count' => $result['success_count'],
+            'files_count' => count($files),
+            'files' => array_map(fn($file) => $file->getClientOriginalName(), $files),
         ]);
-    }
 
-    if ($result['error_count'] > 0) {
-        Log::error('Failed to upload some evidence files', [
-            'ticket' => $record->No_Ticket,
-            'errors' => $result['errors'],
+        $evidenceService = app(EvidenceService::class);
+        $files = is_array($files) ? $files : [$files];
+
+        $result = $evidenceService->uploadFiles($record->No_Ticket, $files, [
+            'upload_stage' => TicketEvidence::STAGE_INITIAL,
+            'description' => null,
         ]);
-        Notification::make()
-            ->warning()
-            ->title('Upload Issues')
-            ->body('Some files failed to upload: ' . implode(', ', array_column($result['errors'], 'error')))
-            ->send();
+
+        if ($result['success_count'] > 0) {
+            Log::info('Evidence files uploaded via TicketResource', [
+                'ticket' => $record->No_Ticket,
+                'uploaded_count' => $result['success_count'],
+            ]);
+        }
+
+        if ($result['error_count'] > 0) {
+            Log::error('Failed to upload some evidence files', [
+                'ticket' => $record->No_Ticket,
+                'errors' => $result['errors'],
+            ]);
+            Notification::make()
+                ->warning()
+                ->title('Upload Issues')
+                ->body('Some files failed to upload: ' . implode(', ', array_column($result['errors'], 'error')))
+                ->send();
+        }
     }
-}
 
     public static function afterCreate($record, array $data): void
     {

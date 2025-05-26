@@ -662,28 +662,28 @@ class ViewTicket extends ViewRecord
 
                     // Evidence Files section below the main content, spanning full width
                     Section::make('Evidence Files')
-                        ->schema([
-                            ViewEntry::make('evidence_management')
-                                ->view('filament.components.ticket-evidences')
-                                ->viewData([
-                                    'record' => $this->record,
-                                    'evidences' => $this->record->evidences()->latest()->get() ?? collect(),
-                                ])
-                                ->columnSpanFull(),
-                        ])
-                        ->collapsible()
-                        ->collapsed(fn () => $this->record->evidences()->count() === 0)
-                        ->visible(fn () => $this->record->evidences()->count() > 0)
-                        ->headerActions([
-                            \Filament\Infolists\Components\Actions\Action::make('uploadMore')
-                                ->label('Upload More')
-                                ->icon('heroicon-m-plus')
-                                ->color('primary')
-                                ->action(function () {
-                                    $this->mountAction('uploadEvidence');
-                                }),
-                        ])
-                        ->extraAttributes(['class' => 'mt-6']), // Add margin-top for visual separation
+                    ->schema([
+                        ViewEntry::make('evidence_management')
+                            ->view('filament.components.ticket-evidences')
+                            ->viewData([
+                                'record' => $this->record,
+                                'evidences' => $this->record->evidences()->latest()->get() ?? collect(),
+                            ])
+                            ->columnSpanFull(),
+                    ])
+                    ->collapsible()
+                    ->collapsed(fn () => $this->record->evidences()->count() === 0)
+                    ->visible(fn () => $this->record->evidences()->count() > 0)
+                    ->headerActions([
+                        \Filament\Infolists\Components\Actions\Action::make('uploadMore')
+                            ->label('Upload More')
+                            ->icon('heroicon-m-plus')
+                            ->color('primary')
+                            ->action(function () {
+                                $this->mountAction('uploadEvidence');
+                            }),
+                    ])
+                    ->extraAttributes(['class' => 'mt-6']),
                 ]),
         ]);
 }

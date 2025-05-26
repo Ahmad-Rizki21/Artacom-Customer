@@ -7,6 +7,7 @@ use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
 use Filament\Notifications\Notification;
 use App\Models\AlfaLawson\TicketAction;
+use Illuminate\Support\Facades\Log;
 
 class CreateTicket extends CreateRecord
 {
@@ -24,7 +25,6 @@ class CreateTicket extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        // Redirect ke halaman view setelah create
         return $this->getResource()::getUrl('view', ['record' => $this->record]);
     }
 
@@ -34,12 +34,43 @@ class CreateTicket extends CreateRecord
             // Buat entri awal di TicketAction berdasarkan Problem
             TicketAction::create([
                 'No_Ticket' => $this->record->No_Ticket,
-                'Action_Taken' => 'OPEN', // Status awal sebagai 'Note'
+                'Action_Taken' => 'OPEN',
                 'Action_Time' => now(),
                 'Action_By' => Auth::user()->name,
                 'Action_Level' => Auth::user()->Level ?? 'Level 1',
-                'Action_Description' => $this->record->Problem ?? 'No problem description provided.', // Ambil dari kolom Problem
+                'Action_Description' => $this->record->Problem ?? 'No problem description provided.',
             ]);
+
+            // Save evidence if uploaded using EvidenceService
+            if (isset($this->data['evidences']) && !empty($this->data['evidences'])) {
+                $evidenceService = app(\App\Services\EvidenceService::class);
+                $result = $evidenceService->uploadFiles($this->record->No_Ticket, $this->data['evidences'], [
+                    'upload_stage' => \App\Models\AlfaLawson\TicketEvidence::STAGE_INITIAL,
+                    'description' => null,
+                ]);
+
+                if ($result['success_count'] > 0) {
+                    Log::info('Evidence files uploaded via CreateTicket', [
+                        'ticket' => $this->record->No_Ticket,
+                        'uploaded_count' => $result['success_count'],
+                    ]);
+                }
+
+                if ($result['error_count'] > 0) {
+                    Log::error('Failed to upload some evidence files', [
+                        'ticket' => $this->record->No_Ticket,
+                        'errors' => $result['errors'],
+                    ]);
+                    Notification::make()
+                        ->warning()
+                        ->title('Upload Issues')
+                        ->body('Some files failed to upload: ' . implode(', ', array_column($result['errors'], 'error')))
+                        ->send();
+                }
+
+                // Refresh the record to load the new evidence
+                $this->record->refresh();
+            }
 
             // Notifikasi sukses
             Notification::make()

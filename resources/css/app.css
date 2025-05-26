@@ -179,3 +179,13 @@
 .timeline-container .text-gray-900 {
     @apply text-gray-900 dark:text-gray-100;
 }
+
+
+/* Pastikan tidak ada aturan yang menyembunyikan tombol di mode light */
+.dark .evidence-action-button {
+    @apply bg-opacity-90 border border-opacity-50 shadow-sm;
+}
+
+.dark .evidence-action-button:hover {
+    @apply bg-opacity-100 border-opacity-75;
+}

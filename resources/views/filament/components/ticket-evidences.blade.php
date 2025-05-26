@@ -65,9 +65,9 @@
                         {{-- Actions --}}
                         <div class="flex gap-2 pt-2">
                             <a 
-                                href="{{ Storage::url($evidence->file_path) }}" 
+                                href="{{ $evidence->preview_url }}" 
                                 target="_blank" 
-                                class="flex-1 text-center px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+                                class="fi-btn fi-btn-size-sm inline-flex items-center justify-center py-1 gap-1 font-medium rounded-lg bg-primary-600 text-white shadow-sm hover:bg-primary-500 focus:outline-none focus:ring-offset-2 focus:ring-2 focus:ring-inset focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-600 dark:text-white fi-ac-btn-action flex-1"
                             >
                                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -76,15 +76,15 @@
                                 View
                             </a>
                             <a 
-                                href="{{ Storage::url($evidence->file_path) }}" 
-                                download="{{ $evidence->file_name }}"
-                                class="flex-1 text-center px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
-                            >
-                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                                Download
-                            </a>
+                            href="{{ Storage::url($evidence->file_path) }}" 
+                            download="{{ $evidence->file_name }}" 
+                            class="fi-btn fi-btn-size-sm inline-flex items-center justify-center py-1 gap-1 font-medium rounded-lg bg-primary-600 text-white shadow-sm hover:bg-primary-500 focus:outline-none focus:ring-offset-2 focus:ring-2 focus:ring-inset focus:ring-primary-500 dark:bg-primary-700 dark:hover:bg-primary-600 dark:text-white fi-ac-btn-action flex-1"
+                        >
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Download
+                        </a>
                         </div>
                     </div>
                 </div>

@@ -44,9 +44,9 @@ class TicketEvidence extends Model
      * Relationship to Ticket
      */
     public function ticket(): BelongsTo
-{
-    return $this->belongsTo(Ticket::class, 'No_Ticket', 'No_Ticket');
-}
+    {
+        return $this->belongsTo(Ticket::class, 'No_Ticket', 'No_Ticket');
+    }
 
     /**
      * Relationship to User who uploaded
@@ -101,6 +101,22 @@ class TicketEvidence extends Model
     public function isDocument(): bool
     {
         return $this->file_type === self::TYPE_DOCUMENT;
+    }
+
+    /**
+     * Get preview URL for the file
+     */
+    public function getPreviewUrlAttribute(): string
+    {
+        return $this->file_url;
+    }
+
+    /**
+     * Check if file is PDF
+     */
+    public function isPDF(): bool
+    {
+        return $this->mime_type === 'application/pdf';
     }
 
     /**

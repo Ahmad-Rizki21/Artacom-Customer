@@ -19,7 +19,7 @@ class Ticket extends Model
     public $incrementing = false;
     protected $keyType = 'string';
 
-    const TICKET_PREFIX = 'TI-';
+    const TICKET_PREFIX = 'AJ-';
     const STATUS_OPEN = 'OPEN';
     const STATUS_PENDING = 'PENDING';
     const STATUS_CLOSED = 'CLOSED';
@@ -79,6 +79,11 @@ class Ticket extends Model
                     'pending_stop' => $model->Pending_Stop?->toDateTimeString(),
                 ]);
 
+                // Tambahkan validasi untuk mencegah tiket yang sudah CLOSED dibuka kembali
+                if ($oldStatus === self::STATUS_CLOSED && $newStatus !== self::STATUS_CLOSED) {
+                    throw new \Exception('Tiket yang sudah ditutup tidak dapat dibuka kembali.');
+                }
+
                 switch ($newStatus) {
                     case self::STATUS_PENDING:
                         // Validasi alasan pending
@@ -94,7 +99,6 @@ class Ticket extends Model
                             $pendingStart = Carbon::parse($model->Pending_Start);
                             $pendingStop = Carbon::parse($model->Pending_Stop);
                             
-                            // Pastikan Pending_Stop lebih besar dari Pending_Start
                             if ($pendingStop->gt($pendingStart)) {
                                 $additionalPendingSeconds = $pendingStop->timestamp - $pendingStart->timestamp;
                                 $currentDuration = $model->pending_duration_seconds ?? 0;
@@ -155,8 +159,8 @@ class Ticket extends Model
                             $model->Pending_Stop = $now;
                         }
 
-                        // PERBAIKAN: Simpan durasi final ke kolom yang sesuai
-                        $currentTimer = $model->getCurrentTimer(true); // true = gunakan waktu tutup
+                        // Simpan durasi final ke kolom yang sesuai
+                        $currentTimer = $model->getCurrentTimer(true);
                         $model->open_duration_seconds = $currentTimer['open']['seconds'];
                         $model->total_duration_seconds = $currentTimer['total']['seconds'];
                         
@@ -202,13 +206,12 @@ class Ticket extends Model
             }
         });
 
-        // Tambahkan event untuk memastikan pending_duration_seconds tidak pernah negatif
+        // Pastikan durasi tidak negatif
         static::saving(function ($model) {
             if (isset($model->attributes['pending_duration_seconds'])) {
                 $model->attributes['pending_duration_seconds'] = max(0, (int) $model->attributes['pending_duration_seconds']);
             }
             
-            // PERBAIKAN: Pastikan nilai durasi lainnya juga tidak negatif
             if (isset($model->attributes['open_duration_seconds'])) {
                 $model->attributes['open_duration_seconds'] = max(0, (int) $model->attributes['open_duration_seconds']);
             }
@@ -233,7 +236,6 @@ class Ticket extends Model
         $start = Carbon::parse($this->Open_Time)->timestamp;
         $now = Carbon::now()->timestamp;
 
-        // PERBAIKAN: Jika tiket sudah ditutup dan ada nilai tersimpan, gunakan itu
         if ($this->Status === 'CLOSED' && $this->Closed_Time) {
             if (isset($this->open_duration_seconds) && $this->open_duration_seconds > 0) {
                 return $this->open_duration_seconds;
@@ -274,7 +276,6 @@ class Ticket extends Model
      */
     public function getCurrentTimer($useClosedTime = false)
     {
-        // PERBAIKAN: Untuk tiket yang sudah CLOSED, gunakan nilai tersimpan jika ada
         if ($this->Status === 'CLOSED' && 
             isset($this->open_duration_seconds) && 
             isset($this->pending_duration_seconds) && 
@@ -295,7 +296,6 @@ class Ticket extends Model
             ];
         }
         
-        // Gunakan waktu sekarang atau waktu tutup
         $now = $useClosedTime && $this->Closed_Time ? $this->Closed_Time->getTimestamp() : now()->getTimestamp();
         $openSeconds = 0;
         $pendingSeconds = 0;
@@ -309,16 +309,13 @@ class Ticket extends Model
                 $openSeconds = $now - $openStart;
             }
 
-            // Ambil akumulasi pending dari database
             $pendingSeconds = max(0, $this->pending_duration_seconds ?? 0);
 
-            // Jika sedang pending, tambahkan durasi pending saat ini
             if ($this->Status === 'PENDING' && $this->Pending_Start) {
                 $currentPendingSeconds = $now - $this->Pending_Start->getTimestamp();
                 $pendingSeconds += max(0, $currentPendingSeconds);
             }
 
-            // Kurangi total pending dari open seconds
             $openSeconds = max(0, $openSeconds - $pendingSeconds);
         }
 
@@ -345,7 +342,6 @@ class Ticket extends Model
 
     public function getTotalDurationAttribute()
     {
-        // PERBAIKAN: Jika tiket sudah ditutup dan ada nilai tersimpan, gunakan itu
         if ($this->Status === 'CLOSED' && isset($this->total_duration_seconds) && $this->total_duration_seconds > 0) {
             return $this->total_duration_seconds;
         }
@@ -447,7 +443,7 @@ class Ticket extends Model
         // Jika ini adalah aksi eskalsi, ambil level tujuan dari data (misalnya)
         $escalationTargetLevel = null;
         if ($newActionTaken === 'Escalation' && isset($data['escalation_level'])) {
-            $escalationTargetLevel = $data['escalation_level']; // Level tujuan eskalsi
+            $escalationTargetLevel = $data['escalation_level'];
         }
 
         // Update data action
@@ -456,12 +452,17 @@ class Ticket extends Model
             'Action_Description' => $data['action_description'],
             'Action_Time' => now(),
             'Action_By' => Auth::user()->name,
-            'Action_Level' => $userLevel, // Selalu gunakan level user
-            'Escalation_Target_Level' => $escalationTargetLevel, // Simpan level tujuan jika ada
+            'Action_Level' => $userLevel,
+            'Escalation_Target_Level' => $escalationTargetLevel,
         ]);
 
         // Logika untuk memperbarui status ticket
         if ($oldActionTaken !== $newActionTaken) {
+            // Jika tiket sudah CLOSED, hanya izinkan aksi "Note"
+            if ($this->Status === self::STATUS_CLOSED && $newActionTaken !== 'Note') {
+                throw new \Exception('Tiket yang sudah ditutup hanya dapat ditambahkan catatan (Note).');
+            }
+
             switch ($newActionTaken) {
                 case 'Pending Clock':
                     $this->Status = self::STATUS_PENDING;
@@ -477,7 +478,6 @@ class Ticket extends Model
                         throw new \Exception('Mohon isi deskripsi aksi sebelum menutup ticket.');
                     }
                     
-                    // PERBAIKAN: Simpan nilai timer sebelum menutup tiket
                     $currentTimer = $this->getCurrentTimer(true);
                     $this->open_duration_seconds = $currentTimer['open']['seconds'];
                     $this->pending_duration_seconds = $currentTimer['pending']['seconds'];
@@ -498,7 +498,6 @@ class Ticket extends Model
                     break;
 
                 case 'Escalation':
-                    // Update Current_Escalation_Level pada ticket
                     if ($escalationTargetLevel) {
                         $this->Current_Escalation_Level = $escalationTargetLevel;
                     }

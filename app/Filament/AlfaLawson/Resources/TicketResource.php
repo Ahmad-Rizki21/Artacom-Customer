@@ -166,7 +166,7 @@ class TicketResource extends Resource
                                 ->columnSpan(1)
                                 ->visible(fn () => $operation === 'create'),
 
-                            Select::make('Status')
+                                Select::make('Status')
                                 ->options([
                                     'OPEN' => 'Open',
                                     'CLOSED' => 'Closed',
@@ -174,13 +174,13 @@ class TicketResource extends Resource
                                 ->required()
                                 ->live()
                                 ->afterStateUpdated(function ($state, Forms\Set $set, ?Model $record) {
-                                    if ($state === 'CLOSED') {
-                                        $set('Closed_Time', $record?->Closed_Time ?? now());
+                                    if ($state === 'CLOSED' && $record?->Status !== 'CLOSED') {
+                                        $set('Closed_Time', now());
                                     } elseif ($state === 'OPEN') {
                                         $set('Closed_Time', null);
                                     }
                                 })
-                                ->disabled(fn (?Model $record) => $record?->Status === 'CLOSED')
+                                ->disabled(fn (?Model $record) => $record?->Status === 'CLOSED') // Nonaktifkan jika sudah CLOSED
                                 ->dehydrated()
                                 ->native(false)
                                 ->extraAttributes([

@@ -100,7 +100,7 @@ class AlfaPanelProvider extends PanelProvider
                     ->group('Panel Switcher')
                     ->childItems([
                         NavigationItem::make()
-                            ->label('ALFA LAWSON CUSTOMER')
+                            ->label('SDWAN SERVICE')
                             ->url('/alfa')
                             ->icon('heroicon-o-check-circle')
                             ->isActiveWhen(fn() => request()->is('alfa*')),

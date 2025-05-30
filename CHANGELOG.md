@@ -24,6 +24,16 @@
 - Timer nya ga masuk ke PDF Export (Updated Display) - DONE
 - Setelah Edit (Save Change) redirect to List Ticket with Notification - DONE
 
+## Updates - 2025-05-30
+- Updtae Export to Excel TablePeplink - DONE
+- Updtae Hstorikal Peplink - DONE
+
+### Added
+- Deskripsi TablePeplink -DONE
+- Deskripsi Hstorikal Peplink -DONE
+- Deskripsi Export to Excel TablePeplink -DONE
+- Deskripsi Updtae Export to Excel TablePeplink -DONE
+
 
 ## [1.0.0] - 2025-05-27
 - Initial release.

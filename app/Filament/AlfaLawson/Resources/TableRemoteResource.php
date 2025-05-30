@@ -113,6 +113,7 @@ class TableRemoteResource extends Resource
                             ->options([
                                 'ALFAMART' => 'ALFAMART',
                                 'LAWSON' => 'LAWSON',
+                                'BSI' => 'BSI'
                             ])
                             ->searchable()
                             ->helperText('Select the customer associated with this site.'),

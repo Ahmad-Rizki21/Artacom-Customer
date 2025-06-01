@@ -40,6 +40,7 @@ class AlfaPanelProvider extends PanelProvider
             ->id('alfa')
             ->path('alfa')
             ->login()
+            ->spa()
             ->colors([
                 'danger' => Color::Rose,
                 'gray' => Color::Gray,

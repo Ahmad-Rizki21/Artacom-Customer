@@ -245,32 +245,32 @@ class TicketExport implements
     }
 
     public function columnWidths(): array
-    {
-        return [
-            'A' => 15, // No Ticket
-            'B' => 20, // Customer
-            'C' => 15, // Site ID
-            'D' => 30, // Alamat
-            'E' => 15, // IP Address
-            'F' => 20, // Kategori Pelaporan
-            'G' => 30, // Problem Summary
-            'H' => 15, // Status Ticket
-            'I' => 15, // Open Level
-            'J' => 20, // Escalation Level
-            'K' => 20, // Open Date
-            'L' => 20, // Pending Date
-            'M' => 20, // Closed Date
-            'N' => 30, // Pending Reason
-            'O' => 40, // Action Description (increased for detailed content)
-            'P' => 15, // PIC
-            'Q' => 15, // Reported By
-            'R' => 15, // Open Clock
-            'S' => 15, // Total Pending
-            'T' => 15, // Total Duration
-            'U' => 15, // Downtime
-            'V' => 15, // Classification
-        ];
-    }
+{
+    return [
+        'A' => 18, // No Ticket
+        'B' => 22, // Customer
+        'C' => 18, // Site ID
+        'D' => 35, // Alamat
+        'E' => 18, // IP Address
+        'F' => 22, // Kategori Pelaporan
+        'G' => 40, // Problem Summary (increased for more space)
+        'H' => 18, // Status Ticket
+        'I' => 18, // Open Level
+        'J' => 25, // Escalation Level (increased for longer text)
+        'K' => 22, // Open Date
+        'L' => 22, // Pending Date
+        'M' => 22, // Closed Date
+        'N' => 40, // Pending Reason (increased for more space)
+        'O' => 50, // Action Description (increased for detailed content)
+        'P' => 18, // PIC
+        'Q' => 20, // Classification
+        'R' => 18, // Reported By
+        'S' => 18, // Open Clock
+        'T' => 18, // Total Pending
+        'U' => 18, // Total Duration
+        'V' => 18, // Downtime
+    ];
+}
 
     public function startCell(): string
     {
@@ -278,253 +278,286 @@ class TicketExport implements
     }
 
     public function styles(Worksheet $sheet)
-    {
-        $lastColumn = 'V';
-        
-        $sheet->mergeCells("A1:{$lastColumn}1");
-        $sheet->setCellValue('A1', $this->title);
-        $sheet->getStyle('A1')->applyFromArray([
+{
+    $lastColumn = 'V';
+    $highestRow = $sheet->getHighestRow();
+
+    // Title (Row 1)
+    $sheet->mergeCells("A1:{$lastColumn}1");
+    $sheet->setCellValue('A1', $this->title);
+    $sheet->getStyle('A1')->applyFromArray([
+        'font' => [
+            'bold' => true,
+            'size' => 16,
+            'color' => ['argb' => 'FFFFFFFF'], // White text
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+            'vertical' => Alignment::VERTICAL_CENTER,
+        ],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['argb' => 'FF1E3A8A'], // Dark blue background
+        ],
+        'borders' => [
+            'bottom' => [
+                'borderStyle' => Border::BORDER_MEDIUM,
+                'color' => ['argb' => 'FFFFFFFF'], // White border
+            ],
+        ],
+    ]);
+    $sheet->getRowDimension(1)->setRowHeight(35);
+
+    // Subtitle/Period (Row 2)
+    $sheet->mergeCells("A2:{$lastColumn}2");
+    $periodText = 'Periode: ' . Carbon::now()->format('d/m/Y H:i:s');
+    if ($this->subtitle) {
+        $periodText = $this->subtitle;
+    } elseif ($this->dateFrom && $this->dateTo) {
+        $periodText = 'Periode: ' . Carbon::parse($this->dateFrom)->format('d/m/Y') . ' s/d ' . Carbon::parse($this->dateTo)->format('d/m/Y');
+    }
+    $sheet->setCellValue('A2', $periodText);
+    $sheet->getStyle('A2')->applyFromArray([
+        'font' => [
+            'bold' => true,
+            'size' => 12,
+            'color' => ['argb' => 'FF1E3A8A'], // Dark blue text
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+            'vertical' => Alignment::VERTICAL_CENTER,
+        ],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['argb' => 'FFEFF6FF'], // Very light blue background
+        ],
+    ]);
+    $sheet->getRowDimension(2)->setRowHeight(25);
+
+    // Spacer Row (Row 3)
+    $sheet->mergeCells("A3:{$lastColumn}3");
+    $sheet->getRowDimension(3)->setRowHeight(10);
+
+    // Header Row (Row 4)
+    $sheet->getStyle("A4:{$lastColumn}4")->applyFromArray([
+        'font' => [
+            'bold' => true,
+            'size' => 12,
+            'color' => ['argb' => 'FFFFFFFF'], // White text
+        ],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['argb' => 'FF3B82F6'], // Bright blue background
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+            'vertical' => Alignment::VERTICAL_CENTER,
+            'wrapText' => true,
+        ],
+        'borders' => [
+            'allBorders' => [
+                'borderStyle' => Border::BORDER_THIN,
+                'color' => ['argb' => 'FFFFFFFF'], // White borders
+            ],
+        ],
+    ]);
+    $sheet->getRowDimension(4)->setRowHeight(40);
+
+    // Data Rows (Row 5 onwards)
+    $sheet->getStyle("A5:{$lastColumn}{$highestRow}")->applyFromArray([
+        'font' => [
+            'size' => 11,
+            'color' => ['argb' => 'FF1F2937'], // Dark gray text
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+            'vertical' => Alignment::VERTICAL_CENTER,
+            'wrapText' => true,
+        ],
+        'borders' => [
+            'allBorders' => [
+                'borderStyle' => Border::BORDER_THIN,
+                'color' => ['argb' => 'FFD1D5DB'], // Light gray borders
+            ],
+        ],
+    ]);
+
+    // Left-align specific columns for better readability
+    $sheet->getStyle("G5:G{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT); // Problem Summary
+    $sheet->getStyle("O5:O{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT); // Action Description
+    $sheet->getStyle("N5:N{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT); // Pending Reason
+    $sheet->getStyle("D5:D{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT); // Alamat
+
+    // Alternate row shading for better readability
+    for ($row = 5; $row <= $highestRow; $row++) {
+        $fillColor = ($row % 2 == 0) ? 'FFF9FAFB' : 'FFFFFFFF'; // Light gray for even rows, white for odd rows
+        $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => $fillColor],
+            ],
+        ]);
+
+        // Status Column Styling (Column H)
+        $status = $sheet->getCell("H{$row}")->getValue();
+        $statusColor = match ($status) {
+            'CLOSED' => 'FF16A34A', // Green
+            'OPEN' => 'FF2563EB', // Blue
+            'PENDING' => 'FFF59E0B', // Yellow
+            default => 'FF6B7280', // Gray
+        };
+        $sheet->getStyle("H{$row}")->applyFromArray([
             'font' => [
                 'bold' => true,
-                'size' => 16,
-                'color' => ['argb' => 'FF000000'],
-            ],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
+                'color' => ['argb' => 'FFFFFFFF'], // White text
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FFEEF2FF'],
+                'startColor' => ['argb' => $statusColor],
             ],
             'borders' => [
-                'bottom' => [
+                'allBorders' => [
                     'borderStyle' => Border::BORDER_MEDIUM,
-                    'color' => ['argb' => 'FF4A90E2'],
-                ],
-            ],
-        ]);
-        $sheet->getRowDimension(1)->setRowHeight(30);
-
-        $sheet->mergeCells("A2:{$lastColumn}2");
-        $periodText = 'Periode: ' . Carbon::now()->format('d/m/Y H:i:s');
-        if ($this->subtitle) {
-            $periodText = $this->subtitle;
-        } elseif ($this->dateFrom && $this->dateTo) {
-            $periodText = 'Periode: ' . Carbon::parse($this->dateFrom)->format('d/m/Y') . ' s/d ' . Carbon::parse($this->dateTo)->format('d/m/Y');
-        }
-        
-        $sheet->setCellValue('A2', $periodText);
-        $sheet->getStyle('A2')->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'size' => 12,
-                'color' => ['argb' => 'FF4A4A4A'],
-            ],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-            ],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FFF8F9FA'],
-            ],
-        ]);
-        $sheet->getRowDimension(2)->setRowHeight(25);
-        
-        $sheet->mergeCells("A3:{$lastColumn}3");
-        $sheet->getRowDimension(3)->setRowHeight(10);
-
-        $sheet->getStyle("A4:{$lastColumn}4")->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'size' => 12,
-                'color' => ['argb' => 'FFFFFFFF'],
-            ],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FF4A90E2'],
-            ],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-                'wrapText' => true,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['argb' => 'FF000000'],
-                ],
-            ],
-        ]);
-        $sheet->getRowDimension(4)->setRowHeight(30);
-
-        $highestRow = $sheet->getHighestRow();
-        $sheet->getStyle("A5:{$lastColumn}{$highestRow}")->applyFromArray([
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-                'wrapText' => true,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['argb' => 'FF000000'],
+                    'color' => ['argb' => 'FF000000'], // Black border for emphasis
                 ],
             ],
         ]);
 
-        $sheet->getStyle("G5:G{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-        $sheet->getStyle("O5:O{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-        $sheet->getStyle("N5:N{$highestRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        // Escalation Level Styling (Column J)
+        $escalation = $sheet->getCell("J{$row}")->getValue();
+        if ($escalation && $escalation !== '-') {
+            $levelMatch = [];
+            preg_match('/Level\s*(\d+)/i', $escalation, $levelMatch);
+            $level = isset($levelMatch[1]) ? (int)$levelMatch[1] : 0;
 
-        for ($row = 5; $row <= $highestRow; $row++) {
-            if (($row % 2) === 0) {
-                $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['argb' => 'FFF2F2F2'],
-                    ],
-                ]);
-            } else {
-                $sheet->getStyle("A{$row}:{$lastColumn}{$row}")->applyFromArray([
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['argb' => 'FFFFFFFF'],
-                    ],
-                ]);
+            $escalationColor = match ($level) {
+                1 => 'FF93C5FD', // Light Blue (NOC)
+                2 => 'FF60A5FA', // Blue (SPV NOC)
+                3 => 'FF86EFAC', // Light Green (Teknisi)
+                4 => 'FF4ADE80', // Green (SPV Teknisi)
+                5 => 'FFFED7AA', // Light Orange (Engineer)
+                6 => 'FFFCA5A5', // Light Red (Management)
+                default => 'FFE5E7EB', // Gray
+            };
+
+            if ($level === 0) {
+                $escalationColor = match (true) {
+                    str_contains(strtolower($escalation), 'noc') && !str_contains(strtolower($escalation), 'spv') => 'FF93C5FD',
+                    str_contains(strtolower($escalation), 'spv noc') => 'FF60A5FA',
+                    str_contains(strtolower($escalation), 'teknisi') && !str_contains(strtolower($escalation), 'spv') => 'FF86EFAC',
+                    str_contains(strtolower($escalation), 'spv teknisi') => 'FF4ADE80',
+                    str_contains(strtolower($escalation), 'engineer') => 'FFFED7AA',
+                    str_contains(strtolower($escalation), 'management') => 'FFFCA5A5',
+                    default => 'FFE5E7EB',
+                };
             }
 
-            $status = $sheet->getCell("H{$row}")->getValue();
-            $statusColor = match ($status) {
-                'CLOSED' => 'FF00B050',
-                'OPEN' => 'FF0070C0',
-                'PENDING' => 'FFFFC000',
-                default => 'FF000000',
-            };
-            
-            $sheet->getStyle("H{$row}")->applyFromArray([
+            $textColor = ($level >= 5 || str_contains(strtolower($escalation), 'engineer') || str_contains(strtolower($escalation), 'management')) ? 'FF000000' : 'FF000000'; // Black text for higher levels
+            $sheet->getStyle("J{$row}")->applyFromArray([
                 'font' => [
                     'bold' => true,
-                    'color' => ['argb' => 'FFFFFFFF'],
+                    'color' => ['argb' => $textColor],
                 ],
                 'fill' => [
                     'fillType' => Fill::FILL_SOLID,
-                    'startColor' => ['argb' => $statusColor],
+                    'startColor' => ['argb' => $escalationColor],
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_MEDIUM,
+                        'color' => ['argb' => 'FF000000'], // Black border for emphasis
+                    ],
                 ],
             ]);
-            
-            $escalation = $sheet->getCell("J{$row}")->getValue();
-            if ($escalation && $escalation !== '-') {
-                $levelMatch = [];
-                preg_match('/Level\s*(\d+)/i', $escalation, $levelMatch);
-                $level = isset($levelMatch[1]) ? (int)$levelMatch[1] : 0;
-                
-                $escalationColor = match ($level) {
-                    1 => 'FF00B0F0',
-                    2 => 'FF0070C0',
-                    3 => 'FF92D050',
-                    4 => 'FF00B050',
-                    5 => 'FFFFC000',
-                    6 => 'FFFF0000',
-                    default => 'FFC0C0C0',
-                };
-                
-                if ($level === 0) {
-                    $escalationColor = match (true) {
-                        str_contains(strtolower($escalation), 'noc') && !str_contains(strtolower($escalation), 'spv') => 'FF00B0F0',
-                        str_contains(strtolower($escalation), 'spv noc') => 'FF0070C0',
-                        str_contains(strtolower($escalation), 'teknisi') && !str_contains(strtolower($escalation), 'spv') => 'FF92D050',
-                        str_contains(strtolower($escalation), 'spv teknisi') => 'FF00B050',
-                        str_contains(strtolower($escalation), 'engineer') => 'FFFFC000',
-                        str_contains(strtolower($escalation), 'management') => 'FFFF0000',
-                        default => 'FFC0C0C0',
-                    };
-                }
-                
-                $sheet->getStyle("J{$row}")->applyFromArray([
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['argb' => 'FF000000'],
-                    ],
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['argb' => $escalationColor],
-                    ],
-                ]);
-            }
+        }
 
-            // Dynamically adjust row height for Action Description column
-            $actionDescription = $sheet->getCell("O{$row}")->getValue();
-            if ($actionDescription && strlen($actionDescription) > 0) {
-                $lineCount = substr_count($actionDescription, "\n") + 1;
-                $rowHeight = max(15, $lineCount * 15);
+        // Dynamically adjust row height for text-heavy columns
+        foreach (['G', 'N', 'O'] as $col) { // Problem Summary, Pending Reason, Action Description
+            $cellValue = $sheet->getCell("{$col}{$row}")->getValue();
+            if ($cellValue && strlen($cellValue) > 0) {
+                $lineCount = substr_count($cellValue, "\n") + 1;
+                $charCount = strlen($cellValue);
+                $rowHeight = max(20, min(100, $lineCount * 15 + ($charCount / 50)));
                 $sheet->getRowDimension($row)->setRowHeight($rowHeight);
             }
         }
-        
-        $summaryRow = $highestRow + 2;
-        $sheet->mergeCells("A{$summaryRow}:G{$summaryRow}");
-        $sheet->setCellValue("A{$summaryRow}", "Total Tickets: " . ($highestRow - 4));
-        $sheet->getStyle("A{$summaryRow}:G{$summaryRow}")->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'size' => 12,
-            ],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FFF2F2F2'],
-            ],
-            'borders' => [
-                'outline' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['argb' => 'FF000000'],
-                ],
-            ],
-        ]);
-        
-        $footerRow = $summaryRow + 2;
-        $sheet->mergeCells("A{$footerRow}:{$lastColumn}{$footerRow}");
-        $sheet->setCellValue("A{$footerRow}", "Laporan dihasilkan pada: " . Carbon::now()->format('d/m/Y H:i:s') . " oleh PT. Artacomindo");
-        $sheet->getStyle("A{$footerRow}:{$lastColumn}{$footerRow}")->applyFromArray([
-            'font' => [
-                'italic' => true,
-                'size' => 10,
-                'color' => ['argb' => 'FF808080'],
-            ],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-            ],
-        ]);
     }
 
+    // Summary Row
+    $summaryRow = $highestRow + 2;
+    $sheet->mergeCells("A{$summaryRow}:G{$summaryRow}");
+    $sheet->setCellValue("A{$summaryRow}", "Total Tickets: " . ($highestRow - 4));
+    $sheet->getStyle("A{$summaryRow}:G{$summaryRow}")->applyFromArray([
+        'font' => [
+            'bold' => true,
+            'size' => 12,
+            'color' => ['argb' => 'FF1E3A8A'], // Dark blue text
+        ],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['argb' => 'FFEFF6FF'], // Very light blue background
+        ],
+        'borders' => [
+            'outline' => [
+                'borderStyle' => Border::BORDER_MEDIUM,
+                'color' => ['argb' => 'FF1E3A8A'], // Dark blue border
+            ],
+        ],
+    ]);
+    $sheet->getRowDimension($summaryRow)->setRowHeight(30);
+
+    // Footer Row
+    $footerRow = $summaryRow + 2;
+    $sheet->mergeCells("A{$footerRow}:{$lastColumn}{$footerRow}");
+    $sheet->setCellValue("A{$footerRow}", "Laporan dihasilkan pada: " . Carbon::now()->format('d/m/Y H:i:s') . " oleh PT. Artacomindo");
+    $sheet->getStyle("A{$footerRow}:{$lastColumn}{$footerRow}")->applyFromArray([
+        'font' => [
+            'italic' => true,
+            'size' => 10,
+            'color' => ['argb' => 'FF6B7280'], // Gray text
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+        ],
+    ]);
+    $sheet->getRowDimension($footerRow)->setRowHeight(20);
+}
+
     public function registerEvents(): array
-    {
-        return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $event->sheet->freezePane('A5');
-                
-                foreach ($this->columnWidths() as $column => $minWidth) {
-                    $currentWidth = $event->sheet->getColumnDimension($column)->getWidth();
-                    $calculatedWidth = min(50, max($minWidth, $currentWidth));
-                    $event->sheet->getColumnDimension($column)->setWidth($calculatedWidth);
-                }
-                
-                $event->sheet->getHeaderFooter()
-                    ->setOddHeader('&L&B' . $this->title . '&R&D')
-                    ->setOddFooter('&L&B' . $this->title . '&RPage &P of &N');
-                
-                $event->sheet->getPageSetup()
-                    ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
-                    ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
-                    ->setFitToPage(true)
-                    ->setFitToWidth(1)
-                    ->setFitToHeight(0);
-                
-                $event->sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(4, 4);
-            },
-        ];
-    }
+{
+    return [
+        AfterSheet::class => function (AfterSheet $event) {
+            $event->sheet->freezePane('A5');
+
+            foreach ($this->columnWidths() as $column => $minWidth) {
+                $currentWidth = $event->sheet->getColumnDimension($column)->getWidth();
+                $calculatedWidth = min(60, max($minWidth, $currentWidth));
+                $event->sheet->getColumnDimension($column)->setWidth($calculatedWidth);
+            }
+
+            $event->sheet->getHeaderFooter()
+                ->setOddHeader('&L&B' . $this->title . '&R&D')
+                ->setOddFooter('&L&B' . $this->title . '&RPage &P of &N');
+
+            $event->sheet->getPageSetup()
+                ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+                ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+                ->setFitToPage(true)
+                ->setFitToWidth(1)
+                ->setFitToHeight(0)
+                ->setPrintArea("A1:{$event->sheet->getHighestColumn()}{$event->sheet->getHighestRow()}")
+                ->setHorizontalCentered(true);
+
+            $event->sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(4, 4);
+
+            $event->sheet->getPageMargins()
+                ->setTop(0.75)
+                ->setBottom(0.75)
+                ->setLeft(0.5)
+                ->setRight(0.5);
+        },
+    ];
+}
 
     private function getLevelTitle($level)
     {

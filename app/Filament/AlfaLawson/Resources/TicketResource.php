@@ -857,8 +857,8 @@ class TicketResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->emptyStateHeading('No tickets found')
-            ->emptyStateDescription('Create your first ticket to get started')
+            ->emptyStateHeading('Alhamdulillah tidak ada gangguan')
+            ->emptyStateDescription('Buat ticket baru untuk memulai perbaikan')
             ->emptyStateIcon('heroicon-o-ticket');
     }
 

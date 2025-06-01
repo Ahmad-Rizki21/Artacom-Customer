@@ -10,6 +10,383 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+/* Custom styles for improved ticket view */
+/* Add this to your app.css or create a separate CSS file */
+
+/* Enhanced section styling */
+.fi-section {
+    transition: all 0.3s ease;
+    border-radius: 12px !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.fi-section:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+/* Custom gradient backgrounds for sections */
+.ticket-header-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none !important;
+}
+
+.ticket-header-section .fi-section-header-heading {
+    color: white !important;
+}
+
+.timer-section {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    border: 2px solid #3b82f6 !important;
+}
+
+.evidence-section {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    border: 2px solid #ec4899 !important;
+}
+
+/* Enhanced badge styling */
+.fi-badge {
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    border-radius: 8px;
+    padding: 0.375rem 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.fi-badge:hover {
+    transform: scale(1.05);
+}
+
+/* Status badges with custom colors */
+.status-open {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #92400e;
+    border: 1px solid #d97706;
+}
+
+.status-pending {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    color: #1e40af;
+    border: 1px solid #2563eb;
+}
+
+.status-closed {
+    background: linear-gradient(135deg, #34d399, #10b981);
+    color: #047857;
+    border: 1px solid #059669;
+}
+
+/* Enhanced card styling */
+.ticket-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.ticket-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* Timeline enhancements */
+.timeline-item {
+    position: relative;
+    padding-left: 2rem;
+    margin-bottom: 1.5rem;
+    border-left: 2px solid #e5e7eb;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -0.5rem;
+    top: 0.5rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 3px solid white;
+    box-shadow: 0 0 0 3px #e5e7eb;
+}
+
+.timeline-item.escalation::before {
+    background: #ef4444;
+}
+
+.timeline-item.closed::before {
+    background: #10b981;
+}
+
+.timeline-item.note::before {
+    background: #8b5cf6;
+}
+
+/* Button enhancements */
+.fi-btn {
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.fi-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Action button styling */
+.action-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border: none;
+    color: white;
+}
+
+.action-btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border: none;
+    color: white;
+}
+
+.action-btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    color: white;
+}
+
+.action-btn-success {
+    background: linear-gradient(135deg, #10b981, #047857);
+    border: none;
+    color: white;
+}
+
+.action-btn-info {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+    border: none;
+    color: white;
+}
+
+/* Enhanced text entry styling */
+.fi-in-text {
+    transition: all 0.2s ease;
+    border-radius: 8px;
+}
+
+.fi-in-text:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+}
+
+/* Icon enhancements */
+.fi-icon {
+    transition: all 0.2s ease;
+}
+
+.fi-icon:hover {
+    transform: scale(1.1);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .ticket-card {
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .fi-section {
+        margin-bottom: 1rem;
+    }
+    
+    .timeline-item {
+        padding-left: 1.5rem;
+        margin-bottom: 1rem;
+    }
+}
+
+/* Evidence file grid */
+.evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.evidence-item {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.evidence-item:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Priority indicators */
+.priority-high {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    border-left: 4px solid #ef4444;
+    color: #991b1b;
+}
+
+.priority-medium {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-left: 4px solid #f59e0b;
+    color: #92400e;
+}
+
+.priority-low {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    border-left: 4px solid #10b981;
+    color: #047857;
+}
+
+/* Loading animations */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Form enhancements */
+.fi-fo-field-wrp {
+    margin-bottom: 1.5rem;
+}
+
+.fi-fo-field-wrp .fi-fo-field-wrp-label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+/* Modal enhancements */
+.fi-modal-content {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.fi-modal-header {
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Notification improvements */
+.fi-no {
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Problem Summary specific styling */
+.problem-summary-field {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+    color: #374151 !important;
+    font-size: 0.875rem !important;
+    line-height: 1.5 !important;
+}
+
+/* Light mode for Problem Summary */
+.fi-in-text-entry .problem-summary-field {
+    background: white !important;
+    color: #374151 !important;
+    border-color: #d1d5db !important;
+}
+
+/* Ensure text entries have proper background in both modes */
+.fi-in-text-entry {
+    background: white !important;
+    color: #374151 !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    padding: 0.75rem !important;
+}
+
+/* Override any dark mode styling for Problem Summary specifically */
+[data-theme="dark"] .problem-summary-field,
+.dark .problem-summary-field {
+    background: white !important;
+    color: #374151 !important;
+    border-color: #d1d5db !important;
+}
+
+/* Enhanced styling for all text entries to ensure readability */
+.fi-ta-text-entry {
+    background: white !important;
+    color: #374151 !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 0.875rem !important;
+    font-size: 0.875rem !important;
+    line-height: 1.5 !important;
+}
+
+/* Specific override for Problem Summary container */
+.fi-in-text-entry-content {
+    background: white !important;
+    color: #374151 !important;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .ticket-card {
+        background: #1f2937;
+        border: 1px solid #374151;
+    }
+    
+    .fi-section {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    
+    .timeline-item {
+        border-left-color: #4b5563;
+    }
+    
+    /* Keep Problem Summary light even in dark mode */
+    .fi-ta-text-entry,
+    .problem-summary-field,
+    .fi-in-text-entry {
+        background: white !important;
+        color: #374151 !important;
+        border-color: #d1d5db !important;
+    }
+}
+
 /* Timeline Styles */
 .custom-timeline {
     @apply space-y-6 p-4;

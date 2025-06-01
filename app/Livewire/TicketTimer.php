@@ -6,6 +6,7 @@ namespace App\Livewire;
 use Livewire\Component;
 use App\Models\AlfaLawson\Ticket;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class TicketTimer extends Component
 {
@@ -14,17 +15,14 @@ class TicketTimer extends Component
     public int $openTimeSeconds = 0;
     public int $pendingTimeSeconds = 0;
     public int $totalTimeSeconds = 0;
-    public $slaPercentage = 0;
+    
+    public $timerDisplay = [
+        'open' => '00:00:00',
+        'pending' => '00:00:00',
+        'total' => '00:00:00'
+    ];
+    public $statusInfo = [];
     private $lastUpdated = 0;
-
-    protected $listeners = ['ticketStatusUpdated' => 'updateTimer'];
-
-    public function getListeners()
-    {
-        return [
-            'echo:tickets.' . ($this->ticket->No_Ticket ?? 'unknown') . ',TicketStatusUpdated' => 'updateTimer',
-        ];
-    }
 
     public function mount(Ticket $ticket = null)
     {
@@ -33,14 +31,21 @@ class TicketTimer extends Component
                 'ticket_id' => $ticket->No_Ticket ?? 'null',
                 'exists' => $ticket->exists ?? false,
             ]);
-            $ticketId = request()->route('ticket') ?? 'TI-0000001'; // Default for safety
+            $ticketId = request()->route('ticket') ?? 'TI-0000001';
             $this->ticket = Ticket::where('No_Ticket', $ticketId)->firstOrFail();
         } else {
             $this->ticket = $ticket;
         }
 
-        $this->slaPercentage = 0; // Initialize or calculate SLA if needed
         $this->initializeTimer();
+        $this->updateStatusInfo();
+    }
+
+    public function refreshTimer()
+    {
+        $this->ticket->refresh();
+        $this->initializeTimer();
+        $this->updateStatusInfo();
     }
 
     public function initializeTimer()
@@ -58,93 +63,57 @@ class TicketTimer extends Component
             $this->pendingTimeSeconds = $timer['pending']['seconds'] ?? 0;
             $this->totalTimeSeconds = $timer['total']['seconds'] ?? 0;
             
-            // Tambahkan log untuk memastikan timer terisi dengan benar
+            $this->updateTimerDisplay();
+            
             Log::debug('Initialized timer values', [
                 'ticket_id' => $this->ticket->No_Ticket,
                 'status' => $this->ticket->Status,
                 'openSeconds' => $this->openTimeSeconds,
                 'pendingSeconds' => $this->pendingTimeSeconds,
                 'totalSeconds' => $this->totalTimeSeconds,
-                'db_pending_duration_seconds' => $this->ticket->pending_duration_seconds,
             ]);
         }
     }
 
-    public function updateTimer()
+    private function updateTimerDisplay()
     {
-        $now = now()->timestamp;
-        $this->ticket->refresh(); // Get latest data from DB
-        $timer = $this->ticket->getCurrentTimer(); // Calculate current timer values based on DB state
+        $this->timerDisplay = [
+            'open' => $this->formatTime($this->openTimeSeconds),
+            'pending' => $this->formatTime($this->pendingTimeSeconds),
+            'total' => $this->formatTime($this->totalTimeSeconds)
+        ];
+    }
 
-        $this->openTimeSeconds = $timer['open']['seconds'];
-        $this->pendingTimeSeconds = $timer['pending']['seconds'];
-        $this->totalTimeSeconds = $timer['total']['seconds'];
+    private function updateStatusInfo()
+    {
+        $this->statusInfo = [
+            'opened_at' => $this->ticket->Open_Time ? $this->ticket->Open_Time->format('M j, Y g:i A') : 'Unknown',
+            'opened_by' => $this->ticket->Open_By ?? 'System',
+            'current_status' => $this->ticket->Status,
+            'pending_since' => $this->ticket->Pending_Start ? $this->ticket->Pending_Start->format('M j, Y g:i A') : null,
+            'closed_at' => $this->ticket->Closed_Time ? $this->ticket->Closed_Time->format('M j, Y g:i A') : null,
+        ];
+    }
 
-        // PERBAIKAN: Ketika status CLOSED, pastikan nilai timer tersimpan
-        if ($this->ticket->Status === 'CLOSED' && $this->ticket->Closed_Time) {
-            // Tambahkan log untuk debugging
-            Log::debug('Ticket closed, saving final timer values', [
-                'ticket_id' => $this->ticket->No_Ticket,
-                'status' => $this->ticket->Status,
-                'openSeconds' => $this->openTimeSeconds,
-                'pendingSeconds' => $this->pendingTimeSeconds,
-                'totalSeconds' => $this->totalTimeSeconds,
-            ]);
-            
-            // Simpan nilai timer saat CLOSED ke database jika belum ada
-            if (!$this->ticket->open_duration_seconds) {
-                $this->ticket->update([
-                    'open_duration_seconds' => $this->openTimeSeconds,
-                    'pending_duration_seconds' => $this->pendingTimeSeconds,
-                    'total_duration_seconds' => $this->totalTimeSeconds
-                ]);
-                
-                Log::debug('Saved final timer values to database', [
-                    'ticket_id' => $this->ticket->No_Ticket,
-                    'open_duration_seconds' => $this->openTimeSeconds,
-                    'pending_duration_seconds' => $this->pendingTimeSeconds,
-                    'total_duration_seconds' => $this->totalTimeSeconds
-                ]);
-            }
+    private function formatTime(int $seconds): string
+    {
+        if ($seconds < 0) {
+            return '00:00:00';
         }
 
-        Log::debug('Updated timer values from backend', [
-            'ticket_id' => $this->ticket->No_Ticket,
-            'status' => $this->ticket->Status,
-            'openSeconds' => $this->openTimeSeconds,
-            'pendingSeconds' => $this->pendingTimeSeconds,
-            'totalSeconds' => $this->totalTimeSeconds,
-            'db_pending_duration_seconds' => $this->ticket->pending_duration_seconds,
-            'Pending_Start' => $this->ticket->Pending_Start?->timestamp,
-            'Pending_Stop' => $this->ticket->Pending_Stop?->timestamp,
-            'now' => $now,
-        ]);
+        $hours = floor($seconds / 3600);
+        $minutes = floor(($seconds % 3600) / 60);
+        $secs = $seconds % 60;
 
-        // Dispatch event dengan data timer yang sudah dihitung
-        $this->dispatch('timerStateUpdated', [
-            'status' => $this->ticket->Status,
-            'openSeconds' => $this->openTimeSeconds, // Kirim nilai yang sudah dihitung
-            'pendingSeconds' => $this->pendingTimeSeconds, // Kirim nilai yang sudah dihitung
-            'totalSeconds' => $this->totalTimeSeconds, // Kirim nilai yang sudah dihitung
-            'startTime' => $this->ticket->Open_Time?->timestamp,
-            'pendingStart' => $this->ticket->Pending_Start?->timestamp,
-            'pendingStop' => $this->ticket->Pending_Stop?->timestamp,
-            'closedTime' => $this->ticket->Closed_Time?->timestamp,
-            'pendingDurationSeconds' => $this->ticket->pending_duration_seconds ?? 0, // Kirim akumulasi dari DB
-            'timestamp' => $now
-        ]);
-
-        $this->lastUpdated = $now;
+        return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
     }
 
     public function render()
     {
         if (!$this->ticket) {
             Log::error('Ticket is null in render method');
-            // Handle error appropriately, maybe redirect or show error message
-            // For now, try fetching a default ticket again
             $this->ticket = Ticket::where('No_Ticket', 'TI-0000001')->firstOrFail();
-            $this->initializeTimer(); // Re-initialize timer if ticket was null
+            $this->initializeTimer();
         }
 
         return view('livewire.ticket-timer', [
@@ -152,7 +121,8 @@ class TicketTimer extends Component
             'openTimeSeconds' => $this->openTimeSeconds,
             'pendingTimeSeconds' => $this->pendingTimeSeconds,
             'totalTimeSeconds' => $this->totalTimeSeconds,
-            'slaPercentage' => $this->slaPercentage ?? 0,
+            'timerDisplay' => $this->timerDisplay,
+            'statusInfo' => $this->statusInfo,
         ]);
     }
 }

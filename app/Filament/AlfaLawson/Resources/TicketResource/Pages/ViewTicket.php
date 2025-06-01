@@ -20,6 +20,9 @@ use App\Filament\Components\TicketTimer;
 use App\Models\AlfaLawson\TicketEvidence;
 use Filament\Forms\Components\FileUpload;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Support\Enums\FontWeight;
+use Filament\Infolists\Components\IconEntry;
+use Filament\Support\Colors\Color;
 
 class ViewTicket extends ViewRecord
 {
@@ -63,7 +66,7 @@ class ViewTicket extends ViewRecord
                     'Closed_Time' => now(),
                     'Action_Summry' => $data['new_action_description'],
                     'Problem_Summary' => $data['problem_summary'],
-                    'Classification' => $data['classification'], // Tambahkan Classification ke update
+                    'Classification' => $data['classification'],
                 ];
 
                 $currentTimer = $this->record->getCurrentTimer(true);
@@ -114,12 +117,12 @@ class ViewTicket extends ViewRecord
     {
         // Define the escalation levels and their order
         $levelOrder = [
-            'Level 1' => ['order' => 1, 'role' => 'NOC'],
-            'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
-            'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
-            'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
-            'Level 5' => ['order' => 5, 'role' => 'Engineer'],
-            'Level 6' => ['order' => 6, 'role' => 'Management'],
+            'Level 1' => ['order' => 1, 'role' => 'NOC', 'icon' => 'heroicon-o-user'],
+            'Level 2' => ['order' => 2, 'role' => 'SPV NOC', 'icon' => 'heroicon-o-user-group'],
+            'Level 3' => ['order' => 3, 'role' => 'Teknisi', 'icon' => 'heroicon-o-wrench-screwdriver'],
+            'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi', 'icon' => 'heroicon-o-cog-6-tooth'],
+            'Level 5' => ['order' => 5, 'role' => 'Engineer', 'icon' => 'heroicon-o-computer-desktop'],
+            'Level 6' => ['order' => 6, 'role' => 'Management', 'icon' => 'heroicon-o-building-office'],
         ];
 
         // Get the current user and ticket levels
@@ -138,38 +141,24 @@ class ViewTicket extends ViewRecord
         $escalationOptions = [];
         foreach ($levelOrder as $level => $info) {
             if ($info['order'] > max($levelOrder[$currentUserLevel]['order'] ?? 1, $levelOrder[$currentEscalationLevel]['order'] ?? 1)) {
-                $escalationOptions[$level] = $info['role'];
+                $escalationOptions[$level] = $info['role'] . ' (' . $level . ')';
             }
         }
 
         return [
             Actions\EditAction::make()
-                ->url(fn () => $this->getResource()::getUrl('edit', ['record' => $this->record])),
-            Actions\DeleteAction::make()
-                ->requiresConfirmation()
-                ->modalHeading('Delete Ticket')
-                ->modalDescription('Apakah anda yakin ingin menghapus tiket ini?')
-                ->modalSubmitActionLabel('Yes, Delete')
-                ->successNotification(
-                    Notification::make()
-                        ->title('Ticket Deleted')
-                        ->body('The ticket has been successfully deleted.')
-                        ->success()
-                ),
-            Actions\Action::make('escalate')
-                ->label('Eskalasi')
-                ->icon('heroicon-o-arrow-up')
+                ->label('Edit Ticket')
+                ->icon('heroicon-o-pencil-square')
                 ->color('warning')
-                ->visible(function () {
-                    $levelOrder = [
-                        'Level 1' => ['order' => 1, 'role' => 'NOC'],
-                        'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
-                        'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
-                        'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
-                        'Level 5' => ['order' => 5, 'role' => 'Engineer'],
-                        'Level 6' => ['order' => 6, 'role' => 'Management'],
-                    ];
-                    
+                ->button()
+                ->url(fn () => $this->getResource()::getUrl('edit', ['record' => $this->record])),
+
+            Actions\Action::make('escalate')
+                ->label('Escalate Ticket')
+                ->icon('heroicon-o-arrow-trending-up')
+                ->color('danger')
+                ->button()
+                ->visible(function () use ($levelOrder) {
                     $currentUserLevel = Auth::user()->Level ?? 'Level 1';
                     $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
                     
@@ -183,123 +172,111 @@ class ViewTicket extends ViewRecord
                     }
                     return false;
                 })
+                ->requiresConfirmation()
+                ->modalHeading('🚨 Escalate Ticket')
+                ->modalDescription('Are you sure you want to escalate this ticket to a higher level?')
+                ->modalSubmitActionLabel('Yes, Escalate')
+                ->modalCancelActionLabel('Cancel')
                 ->form([
                     Select::make('escalation_level')
                         ->label('Escalation Level')
-                        ->options(function () {
-                            $levelOrder = [
-                                'Level 1' => ['order' => 1, 'role' => 'NOC'],
-                                'Level 2' => ['order' => 2, 'role' => 'SPV NOC'],
-                                'Level 3' => ['order' => 3, 'role' => 'Teknisi'],
-                                'Level 4' => ['order' => 4, 'role' => 'SPV Teknisi'],
-                                'Level 5' => ['order' => 5, 'role' => 'Engineer'],
-                                'Level 6' => ['order' => 6, 'role' => 'Management'],
-                            ];
-                            
-                            $currentUserLevel = Auth::user()->Level ?? 'Level 1';
-                            $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
-                            
-                            $options = [];
-                            foreach ($levelOrder as $level => $info) {
-                                if ($info['order'] > max(
-                                    $levelOrder[$currentUserLevel]['order'] ?? 1,
-                                    $levelOrder[$currentEscalationLevel]['order'] ?? 1
-                                )) {
-                                    $options[$level] = $info['role'];
-                                }
-                            }
-                            return $options;
-                        })
+                        ->options($escalationOptions)
                         ->required()
-                        ->native(false),
+                        ->native(false)
+                        ->placeholder('Select escalation level')
+                        ->helperText('Choose the appropriate level based on the complexity of the issue'),
                     Textarea::make('escalation_description')
-                        ->label('Escalation Description')
+                        ->label('Escalation Reason')
                         ->required()
-                        ->rows(3),
+                        ->rows(4)
+                        ->placeholder('Explain why this ticket needs to be escalated...')
+                        ->helperText('Provide detailed information about why escalation is necessary'),
                 ])
                 ->action(function (array $data) {
                     $this->escalateTicket($data);
-                })
-                ->modalSubmitActionLabel('Submit Escalation'),
+                }),
+
             Actions\Action::make('addAction')
                 ->label('Add Action')
                 ->icon('heroicon-o-plus-circle')
+                ->color('primary')
+                ->button()
+                ->modalHeading('➕ Add New Action')
+                ->modalDescription('Record a new action taken on this ticket')
+                ->modalWidth('2xl')
                 ->form([
                     Select::make('new_action_status')
-                        ->label('Action Status')
+                        ->label('Action Type')
                         ->options(function () {
                             $options = [
-                                'Start Clock' => 'Start Clock',
-                                'Pending Clock' => 'Pending Clock',
-                                'Closed' => 'Closed',
-                                'Note' => 'Note',
+                                'Start Clock' => '▶️ Start Clock',
+                                'Pending Clock' => '⏸️ Pending Clock',
+                                'Closed' => '✅ Close Ticket',
+                                'Note' => '📝 Add Note',
                             ];
                             if ($this->record->Status === 'CLOSED') {
-                                return ['Note' => 'Note'];
+                                return ['Note' => '📝 Add Note'];
                             }
                             return $options;
                         })
                         ->required()
+                        ->native(false)
                         ->reactive()
                         ->afterStateUpdated(function ($state, \Filament\Forms\Set $set) {
                             if ($state === 'Closed') {
                                 $set('show_problem_summary', true);
-                                $set('show_classification', true); // Tambahkan untuk menampilkan Classification
+                                $set('show_classification', true);
                             } else {
                                 $set('show_problem_summary', false);
-                                $set('show_classification', false); // Sembunyikan Classification
+                                $set('show_classification', false);
                             }
                         }),
                     Textarea::make('new_action_description')
-                        ->label('Action Takken')
+                        ->label('Action Description')
                         ->required()
-                        ->rows(3),
+                        ->rows(4)
+                        ->placeholder('Describe the action taken or issue observed...')
+                        ->helperText('Provide detailed information about the action'),
                     Textarea::make('problem_summary')
                         ->label('Problem Summary')
-                        ->helperText('Ringkasan teknis masalah (untuk penggunaan internal)')
+                        ->helperText('Technical summary of the issue (for internal use)')
                         ->rows(3)
-                        ->required(fn (\Filament\Forms\Get $get) => $get('new_action_status') === 'Closed') // Wajib jika status Closed
+                        ->required(fn (\Filament\Forms\Get $get) => $get('new_action_status') === 'Closed')
                         ->hidden(fn (\Filament\Forms\Get $get) => $get('new_action_status') !== 'Closed')
+                        ->placeholder('Summarize the technical details of the problem...')
                         ->afterStateHydrated(function (\Filament\Forms\Set $set, \Filament\Forms\Get $get) {
                             if (empty($get('problem_summary')) && !empty($get('new_action_description'))) {
                                 $set('problem_summary', $get('new_action_description'));
                             }
                         }),
                     Select::make('classification')
-                        ->label('Classification')
+                        ->label('Problem Classification')
                         ->options([
-                            'Hardware' => 'Hardware',
-                            'Fo / Fiber Optic' => 'Fo / Fiber Optic',
-                            'GSM / Sim Card' => 'GSM / Sim Card',
-                            'Listrik' => 'Listrik',
-                            'Customer' => 'Customer',
+                            'Hardware' => '🖥️ Hardware',
+                            'Fo / Fiber Optic' => '📡 Fiber Optic',
+                            'GSM / Sim Card' => '📱 GSM / SIM Card',
+                            'Listrik' => '⚡ Power/Electrical',
+                            'Customer' => '👤 Customer Issue',
                         ])
-                        ->helperText('Klasifikasi masalah (wajib untuk penutupan tiket)')
-                        ->required(fn (\Filament\Forms\Get $get) => $get('new_action_status') === 'Closed') // Wajib jika status Closed
+                        ->helperText('Classify the type of problem (required for ticket closure)')
+                        ->required(fn (\Filament\Forms\Get $get) => $get('new_action_status') === 'Closed')
                         ->hidden(fn (\Filament\Forms\Get $get) => $get('new_action_status') !== 'Closed')
-                        ->native(false),
+                        ->native(false)
+                        ->placeholder('Select problem category'),
                 ])
                 ->action(function (array $data) {
                     $this->addAction($data);
                 })
-                ->modalSubmitActionLabel('Submit')
-                ->extraAttributes(['wire:submit.prevent' => 'addAction']),
-            Actions\Action::make('downloadPdf')
-                ->label('Download PDF')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('success')
-                ->action(function () {
-                    $actions = $this->record->actions()->orderBy('Action_Time', 'asc')->get();
-                    $html = view('pdf.ticket-html', ['ticket' => $this->record, 'actions' => $actions])->render();
-                    $pdf = Pdf::loadHTML($html);
-                    return response()->streamDownload(function () use ($pdf) {
-                        echo $pdf->output();
-                    }, 'ticket_' . $this->record->No_Ticket . '.pdf');
-                }),
+                ->modalSubmitActionLabel('Submit Action'),
+
             Actions\Action::make('uploadEvidence')
                 ->label('Upload Evidence')
-                ->icon('heroicon-o-paper-clip')
+                ->icon('heroicon-o-camera')
                 ->color('info')
+                ->button()
+                ->modalHeading('📎 Upload Evidence Files')
+                ->modalDescription('Upload supporting files, images, or documents for this ticket')
+                ->modalWidth('2xl')
                 ->form([
                     FileUpload::make('evidence_files')
                         ->label('Evidence Files')
@@ -307,11 +284,8 @@ class ViewTicket extends ViewRecord
                         ->disk('public')
                         ->directory('ticket-evidences')
                         ->acceptedFileTypes([
-                            // Images
                             'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-                            // Videos
                             'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/webm',
-                            // Documents
                             'application/pdf',
                             'application/msword',
                             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -321,18 +295,20 @@ class ViewTicket extends ViewRecord
                             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                             'text/plain', 'text/csv'
                         ])
-                        ->maxSize(50 * 1024) // 50MB max
+                        ->maxSize(50 * 1024)
                         ->maxFiles(10)
                         ->required()
-                        ->helperText('Upload images, videos, or documents. Max 50MB per file, 10 files maximum.')
-                        ->columnSpanFull(),
+                        ->helperText('📄 Supported: Images, Videos, Documents | Max: 50MB per file, 10 files total')
+                        ->columnSpanFull()
+                        ->imagePreviewHeight('150')
+                        ->panelLayout('grid'),
                     Select::make('upload_stage')
                         ->label('Upload Stage')
                         ->options([
-                            TicketEvidence::STAGE_INITIAL => 'Initial Report',
-                            TicketEvidence::STAGE_INVESTIGATION => 'Investigation',
-                            TicketEvidence::STAGE_RESOLUTION => 'Resolution',
-                            TicketEvidence::STAGE_CLOSED => 'Closed',
+                            TicketEvidence::STAGE_INITIAL => '🆕 Initial Report',
+                            TicketEvidence::STAGE_INVESTIGATION => '🔍 Investigation',
+                            TicketEvidence::STAGE_RESOLUTION => '🔧 Resolution',
+                            TicketEvidence::STAGE_CLOSED => '✅ Closed',
                         ])
                         ->default(function () {
                             return match ($this->record->Status) {
@@ -342,21 +318,51 @@ class ViewTicket extends ViewRecord
                                 default => TicketEvidence::STAGE_INITIAL,
                             };
                         })
-                        ->required(),
+                        ->required()
+                        ->native(false),
                     Textarea::make('evidence_description')
                         ->label('Evidence Description')
-                        ->placeholder('Describe the evidence being uploaded...')
+                        ->placeholder('Describe what these files show or demonstrate...')
                         ->rows(3)
-                        ->columnSpanFull(),
+                        ->columnSpanFull()
+                        ->helperText('Provide context for the uploaded evidence'),
                 ])
                 ->action(function (array $data) {
                     $this->uploadEvidence($data);
                 })
-                ->modalSubmitActionLabel('Upload Evidence')
-                ->modalWidth('lg'),
+                ->modalSubmitActionLabel('Upload Evidence'),
+
+            Actions\Action::make('downloadPdf')
+                ->label('Download PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->button()
+                ->action(function () {
+                    $actions = $this->record->actions()->orderBy('Action_Time', 'asc')->get();
+                    $html = view('pdf.ticket-html', ['ticket' => $this->record, 'actions' => $actions])->render();
+                    $pdf = Pdf::loadHTML($html);
+                    return response()->streamDownload(function () use ($pdf) {
+                        echo $pdf->output();
+                    }, 'ticket_' . $this->record->No_Ticket . '.pdf');
+                }),
+
+            Actions\DeleteAction::make()
+                ->requiresConfirmation()
+                ->modalHeading('🗑️ Delete Ticket')
+                ->modalDescription('Are you sure you want to permanently delete this ticket? This action cannot be undone.')
+                ->modalSubmitActionLabel('Yes, Delete Permanently')
+                ->color('danger')
+                ->icon('heroicon-o-trash')
+                ->successNotification(
+                    Notification::make()
+                        ->title('Ticket Deleted')
+                        ->body('The ticket has been successfully deleted.')
+                        ->success()
+                ),
         ];
     }
 
+    // [Other methods remain the same - uploadEvidence, escalateTicket, etc.]
     public function uploadEvidence(array $data): void
     {
         try {
@@ -365,19 +371,18 @@ class ViewTicket extends ViewRecord
             }
 
             $uploadedCount = 0;
-            $files = $data['evidence_files']; // This should be an array of temporary file paths or IDs
+            $files = $data['evidence_files'];
 
             foreach ($files as $file) {
                 if (!$file) continue;
 
-                // Since Filament provides temporary file paths, we need to get the original file
-                $temporaryFilePath = $file; // This is the temporary path provided by Filament
+                $temporaryFilePath = $file;
                 $originalFile = new \Illuminate\Http\UploadedFile(
                     storage_path('app/public/' . $temporaryFilePath),
                     basename($temporaryFilePath),
                     mime_content_type(storage_path('app/public/' . $temporaryFilePath)),
                     null,
-                    true // Mark as test to avoid validation issues
+                    true
                 );
 
                 $originalName = $originalFile->getClientOriginalName();
@@ -385,14 +390,11 @@ class ViewTicket extends ViewRecord
                 $fileSize = $originalFile->getSize();
                 $fileType = TicketEvidence::getFileTypeFromMime($mimeType);
 
-                // Generate unique filename
                 $filename = time() . '_' . uniqid() . '.' . $originalFile->getClientOriginalExtension();
                 $filePath = 'ticket-evidences/' . $filename;
 
-                // Move the temporary file to the public disk
                 $originalFile->storeAs('ticket-evidences', $filename, 'public');
 
-                // Save to database
                 TicketEvidence::create([
                     'No_Ticket' => $this->record->No_Ticket,
                     'file_name' => $originalName,
@@ -408,7 +410,6 @@ class ViewTicket extends ViewRecord
                 $uploadedCount++;
             }
 
-            // Create action history
             TicketAction::create([
                 'No_Ticket' => $this->record->No_Ticket,
                 'Action_Taken' => 'Evidence Upload',
@@ -424,7 +425,6 @@ class ViewTicket extends ViewRecord
                 ->body("{$uploadedCount} evidence file(s) have been uploaded successfully.")
                 ->send();
 
-            // Refresh the page to show new evidence
             $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record->No_Ticket]), navigate: false);
         } catch (\Exception $e) {
             Notification::make()
@@ -438,7 +438,6 @@ class ViewTicket extends ViewRecord
     public function escalateTicket(array $data): void
     {
         try {
-            // Validate data is present (though Filament form should handle this)
             if (empty($data['escalation_level']) || empty($data['escalation_description'])) {
                 throw new \Exception('Escalation level and description are required.');
             }
@@ -455,7 +454,6 @@ class ViewTicket extends ViewRecord
             $currentUserLevel = Auth::user()->Level ?? 'Level 1';
             $currentEscalationLevel = $this->record->Current_Escalation_Level ?? $this->record->Open_Level ?? 'Level 1';
 
-            // Validate the selected escalation level
             if (($levelOrder[$data['escalation_level']]['order'] ?? 0) <= ($levelOrder[$currentUserLevel]['order'] ?? 1)) {
                 throw new \Exception('Cannot escalate to a level lower than or equal to your current level.');
             }
@@ -464,18 +462,16 @@ class ViewTicket extends ViewRecord
                 throw new \Exception('Cannot escalate to a level lower than or equal to the current escalation level.');
             }
 
-            // Update ticket
             $this->record->update([
                 'Current_Escalation_Level' => $data['escalation_level'],
             ]);
 
-            // Create action history with the user's level, not the escalation level
             TicketAction::create([
                 'No_Ticket' => $this->record->No_Ticket,
                 'Action_Taken' => 'Escalation',
                 'Action_Time' => now(),
                 'Action_By' => Auth::user()->name,
-                'Action_Level' => Auth::user()->Level ?? 'Level 1', // Gunakan level user yang melakukan aksi
+                'Action_Level' => Auth::user()->Level ?? 'Level 1',
                 'Action_Description' => $data['escalation_description'] . "\nEscalated to: " . ($levelOrder[$data['escalation_level']]['role'] ?? $data['escalation_level']),
             ]);
 
@@ -504,118 +500,243 @@ class ViewTicket extends ViewRecord
     {
         return $infolist
             ->schema([
-                \Filament\Infolists\Components\Grid::make(3)
+                Grid::make(['default' => 1, 'lg' => 12])
                     ->schema([
-                        // Main content (Ticket Information, Problem Details, Progress History) spanning 2 columns
-                        \Filament\Infolists\Components\Grid::make()
-                            ->columnSpan(2)
+                        // Header Status Card
+                        Section::make()
                             ->schema([
-                                Section::make('Ticket Information')
+                                Grid::make(['default' => 1, 'sm' => 2, 'lg' => 3])
                                     ->schema([
                                         TextEntry::make('No_Ticket')
-                                            ->label('No Ticket'),
-                                        TextEntry::make('Customer'),
-                                        TextEntry::make('Site_ID')
-                                            ->label('Site ID')
-                                            ->default('-')
-                                            ->getStateUsing(fn ($record) => $record->remote?->Site_ID ?? $record->Site_ID ?? '-'),
-                                        TextEntry::make('Nama_Toko')
-                                            ->label('Alamat')
-                                            ->default('-')
-                                            ->getStateUsing(fn ($record) => $record->remote?->Nama_Toko ?? '-'),
-                                        TextEntry::make('DC')
-                                            ->label('DC')
-                                            ->default('-')
-                                            ->getStateUsing(fn ($record) => $record->remote?->DC ?? '-'),
-                                        TextEntry::make('IP_Address')
-                                            ->label('IP Address')
-                                            ->default('-')
-                                            ->getStateUsing(function ($record) {
-                                                $ip = $record->remote?->IP_Address ?? '-';
-                                                return $ip !== '-' ? $ip : $ip;
-                                            })
-                                            ->url(function ($record) {
-                                                $ip = $record->remote?->IP_Address ?? '';
-                                                return $ip ? "http://{$ip}:8090" : null;
-                                            })
-                                            ->openUrlInNewTab(),
-                                        TextEntry::make('Status')
+                                            ->label('Ticket Number')
                                             ->badge()
+                                            ->color('primary')
+                                            ->size(TextEntry\TextEntrySize::Large)
+                                            ->weight(FontWeight::Bold)
+                                            ->copyable()
+                                            ->copyMessage('Ticket number copied!')
+                                            ->icon('heroicon-m-ticket'),
+                                        
+                                        TextEntry::make('Status')
+                                            ->label('Current Status')
+                                            ->badge()
+                                            ->size(TextEntry\TextEntrySize::Large)
+                                            ->weight(FontWeight::Bold)
                                             ->color(fn (string $state): string => match ($state) {
                                                 'OPEN' => 'warning',
                                                 'PENDING' => 'info',
                                                 'CLOSED' => 'success',
-                                                default => 'secondary',
+                                                default => 'gray',
+                                            })
+                                            ->icon(fn (string $state): string => match ($state) {
+                                                'OPEN' => 'heroicon-m-play-circle',
+                                                'PENDING' => 'heroicon-m-pause-circle',
+                                                'CLOSED' => 'heroicon-m-check-circle',
+                                                default => 'heroicon-m-question-mark-circle',
                                             }),
-                                        TextEntry::make('Open_Level')
-                                            ->label('Open Level')
+                                        
+                                        TextEntry::make('Catagory')
+                                            ->label('Category')
+                                            ->badge()
+                                            ->color('info')
+                                            ->icon('heroicon-m-tag'),
+                                    ]),
+                            ])
+                            ->columnSpan(['default' => 12])
+                            ->extraAttributes(['class' => 'bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200']),
+
+                        // Main Content Area
+                        Grid::make(['default' => 1, 'lg' => 8])
+                            ->columnSpan(['default' => 12, 'lg' => 8])
+                            ->schema([
+                                // Customer Information Card
+                                Section::make('📍 Customer & Location Information')
+                                    ->description('Customer details and site information')
+                                    ->schema([
+                                        Grid::make(['default' => 1, 'md' => 2, 'lg' => 3])
+                                            ->schema([
+                                                TextEntry::make('Customer')
+                                                    ->icon('heroicon-m-building-storefront')
+                                                    ->weight(FontWeight::Bold)
+                                                    ->color('primary'),
+                                                
+                                                TextEntry::make('Site_ID')
+                                                    ->label('Site ID')
+                                                    ->icon('heroicon-m-map-pin')
+                                                    ->default('-')
+                                                    ->getStateUsing(fn ($record) => $record->remote?->Site_ID ?? $record->Site_ID ?? '-')
+                                                    ->copyable()
+                                                    ->copyMessage('Site ID copied!'),
+                                                
+                                                TextEntry::make('Nama_Toko')
+                                                    ->label('Store Address')
+                                                    ->icon('heroicon-m-map')
+                                                    ->default('-')
+                                                    ->getStateUsing(fn ($record) => $record->remote?->Nama_Toko ?? '-')
+                                                    ->columnSpan(['default' => 1, 'lg' => 1]),
+                                                
+                                                TextEntry::make('DC')
+                                                    ->label('Data Center')
+                                                    ->icon('heroicon-m-server-stack')
+                                                    ->default('-')
+                                                    ->getStateUsing(fn ($record) => $record->remote?->DC ?? '-'),
+                                                
+                                                TextEntry::make('IP_Address')
+                                                    ->label('IP Address')
+                                                    ->icon('heroicon-m-globe-alt')
+                                                    ->default('-')
+                                                    ->getStateUsing(function ($record) {
+                                                        $ip = $record->remote?->IP_Address ?? '-';
+                                                        return $ip !== '-' ? $ip : $ip;
+                                                    })
+                                                    ->url(function ($record) {
+                                                        $ip = $record->remote?->IP_Address ?? '';
+                                                        return $ip ? "http://{$ip}:8090" : null;
+                                                    })
+                                                    ->openUrlInNewTab()
+                                                    ->copyable()
+                                                    ->copyMessage('IP Address copied!'),
+                                                
+                                                TextEntry::make('Open_Level')
+                                                    ->label('Opened At Level')
+                                                    ->icon('heroicon-m-user-group')
+                                                    ->getStateUsing(function ($record) {
+                                                        $levelOrder = [
+                                                            'Level 1' => 'NOC',
+                                                            'Level 2' => 'SPV NOC',
+                                                            'Level 3' => 'Teknisi',
+                                                            'Level 4' => 'SPV Teknisi',
+                                                            'Level 5' => 'Engineer',
+                                                            'Level 6' => 'Management',
+                                                        ];
+                                                        return $levelOrder[$record->Open_Level] ?? $record->Open_Level;
+                                                    })
+                                                    ->badge()
+                                                    ->color('info'),
+                                            ]),
+                                    ])
+                                    ->collapsible()
+                                    ->icon('heroicon-m-building-storefront'),
+
+                                // Problem Details Card
+                                Section::make('🔍 Problem Details')
+                                    ->description('Detailed information about the reported issue')
+                                    ->schema([
+                                        TextEntry::make('Problem')
+                                            ->label('Problem Description')
+                                            ->columnSpanFull()
+                                            ->html()
+                                            ->extraAttributes(['class' => 'text-sm leading-relaxed'])
+                                            ->icon('heroicon-m-exclamation-triangle'),
+                                        
+                                        Grid::make(['default' => 1, 'md' => 3])
+                                            ->schema([
+                                                TextEntry::make('Reported_By')
+                                                    ->label('Reported By')
+                                                    ->icon('heroicon-m-user')
+                                                    ->default('-')
+                                                    ->badge()
+                                                    ->color('gray'),
+                                                
+                                                TextEntry::make('Pic')
+                                                    ->label('Person In Charge')
+                                                    ->icon('heroicon-m-identification')
+                                                    ->getStateUsing(fn ($record) => $record->Pic ?? '-')
+                                                    ->badge()
+                                                    ->color('primary'),
+                                                
+                                                TextEntry::make('Tlp_Pic')
+                                                    ->label('PIC Phone')
+                                                    ->icon('heroicon-m-phone')
+                                                    ->getStateUsing(fn ($record) => $record->Tlp_Pic ?? '-')
+                                                    ->copyable()
+                                                    ->copyMessage('Phone number copied!')
+                                                    ->url(fn ($record) => $record->Tlp_Pic ? 'tel:' . $record->Tlp_Pic : null),
+                                            ]),
+                                        
+                                            TextEntry::make('Problem_Summary')
+                                            ->label('📋 Problem Summary')
+                                            ->default('No summary available')
+                                            ->columnSpanFull()
+                                            ->formatStateUsing(fn (string $state): string => 
+                                                $state ?: 'No summary available'
+                                            )
+                                            ->extraAttributes([
+                                                'class' => 'problem-summary-display bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-lg p-4 shadow-md',
+                                                'style' => 'min-height: 3rem; font-size: 0.875rem; line-height: 1.5;',
+                                            ])
+                                            ->placeholder('Problem summary will appear here when available')
+                                            ->visible(fn ($record) => $record->Status === 'CLOSED'),
+                                        
+                                        TextEntry::make('Classification')
+                                            ->label('🏷️ Classification')
+                                            ->default('Not classified')
                                             ->getStateUsing(function ($record) {
-                                                $levelOrder = [
-                                                    'Level 1' => 'NOC',
-                                                    'Level 2' => 'SPV NOC',
-                                                    'Level 3' => 'Teknisi',
-                                                    'Level 4' => 'SPV Teknisi',
-                                                    'Level 5' => 'Engineer',
-                                                    'Level 6' => 'Management',
+                                                $classifications = [
+                                                    'Hardware' => '🖥️ Hardware',
+                                                    'Fo / Fiber Optic' => '📡 Fiber Optic',
+                                                    'GSM / Sim Card' => '📱 GSM / SIM Card',
+                                                    'Listrik' => '⚡ Power/Electrical',
+                                                    'Customer' => '👤 Customer Issue',
                                                 ];
-                                                return $levelOrder[$record->Open_Level] ?? $record->Open_Level;
-                                            }),
+                                                return $record->Classification ? 
+                                                    $classifications[$record->Classification] ?? $record->Classification : 
+                                                    'Not classified';
+                                            })
+                                            ->badge()
+                                            ->color(function ($state) {
+                                                return match(true) {
+                                                    str_contains($state, 'Hardware') => 'danger',
+                                                    str_contains($state, 'Fiber') => 'warning',
+                                                    str_contains($state, 'GSM') => 'info',
+                                                    str_contains($state, 'Power') => 'success',
+                                                    str_contains($state, 'Customer') => 'primary',
+                                                    default => 'gray'
+                                                };
+                                            })
+                                            ->visible(fn ($record) => $record->Status === 'CLOSED')
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->collapsible()
+                                    ->icon('heroicon-m-document-text'),
+
+                                // Current Escalation Level
+                                Section::make('🚀 Current Escalation Level')
+                                    ->description('Current handling level and escalation status')
+                                    ->schema([
                                         TextEntry::make('Current_Escalation_Level')
-                                            ->label('Current Escalation')
+                                            ->label('Current Level')
                                             ->getStateUsing(function ($record) {
                                                 $levelOrder = [
-                                                    'Level 1' => 'NOC',
-                                                    'Level 2' => 'SPV NOC',
-                                                    'Level 3' => 'Teknisi',
-                                                    'Level 4' => 'SPV Teknisi',
-                                                    'Level 5' => 'Engineer',
-                                                    'Level 6' => 'Management',
+                                                    'Level 1' => '👤 NOC',
+                                                    'Level 2' => '👥 SPV NOC',
+                                                    'Level 3' => '🔧 Teknisi',
+                                                    'Level 4' => '⚙️ SPV Teknisi',
+                                                    'Level 5' => '💻 Engineer',
+                                                    'Level 6' => '🏢 Management',
                                                 ];
                                                 return $record->Current_Escalation_Level 
                                                     ? ($levelOrder[$record->Current_Escalation_Level] ?? $record->Current_Escalation_Level)
-                                                    : '-';
-                                            }),
-                                        TextEntry::make('Catagory')
-                                            ->label('Category'),
-                                    ])
-                                    ->columns(3),
-
-                                Section::make('Problem Details')
-                                    ->schema([
-                                        TextEntry::make('Problem')
-                                            ->label('Problem')
-                                            ->columnSpan(3),
-                                        TextEntry::make('Reported_By')
-                                            ->label('Reported By')
-                                            ->default('-'),
-                                        TextEntry::make('Pic')
-                                            ->label('PIC')
-                                            ->getStateUsing(fn ($record) => $record->Pic ?? '-'),
-                                        TextEntry::make('Tlp_Pic')
-                                            ->label('PIC Phone')
-                                            ->getStateUsing(fn ($record) => $record->Tlp_Pic ?? '-'),
-                                        TextEntry::make('Problem_Summary')
-                                            ->label('Problem Summary')
-                                            ->default('-')
-                                            ->columnSpan(3),
-                                        TextEntry::make('Classification')
-                                            ->label('Classification')
-                                            ->default('-')
-                                            ->getStateUsing(function ($record) {
-                                                $classifications = [
-                                                    'Hardware' => 'Hardware',
-                                                    'Fo / Fiber Optic' => 'Fo / Fiber Optic',
-                                                    'GSM / Sim Card' => 'GSM / Sim Card',
-                                                    'Listrik' => 'Listrik',
-                                                    'Customer' => 'Customer',
-                                                ];
-                                                return $record->Classification ? $classifications[$record->Classification] ?? $record->Classification : '-';
+                                                    : '👤 NOC (Default)';
                                             })
-                                            ->columnSpan(3),
+                                            ->badge()
+                                            ->size(TextEntry\TextEntrySize::Large)
+                                            ->color(function ($record) {
+                                                $level = $record->Current_Escalation_Level ?? 'Level 1';
+                                                return match($level) {
+                                                    'Level 1', 'Level 2' => 'success',
+                                                    'Level 3', 'Level 4' => 'warning',
+                                                    'Level 5', 'Level 6' => 'danger',
+                                                    default => 'gray'
+                                                };
+                                            }),
                                     ])
-                                    ->columns(3),
+                                    ->collapsible()
+                                    ->icon('heroicon-m-arrow-trending-up'),
 
-                                Section::make('Progress History')
+                                // Progress History
+                                Section::make('📈 Progress Timeline')
+                                    ->description('Complete history of actions taken on this ticket')
                                     ->schema([
                                         ViewEntry::make('progress_timeline')
                                             ->view('filament.resources.ticket-progress-timeline')
@@ -623,67 +744,144 @@ class ViewTicket extends ViewRecord
                                                 'record' => $this->record,
                                                 'actions' => $this->record->actions()->orderBy('Action_Time', 'desc')->get(),
                                             ]),
-                                    ]),
+                                    ])
+                                    ->collapsible()
+                                    ->icon('heroicon-m-clock'),
                             ]),
 
-                        // Sidebar content (Timer Information and Evidence Statistics) in the third column
-                        Section::make('Sidebar')
-                            ->columnSpan(1)
+                        // Sidebar
+                        Grid::make(['default' => 1, 'lg' => 4])
+                            ->columnSpan(['default' => 12, 'lg' => 4])
                             ->schema([
-                                Section::make('Timer Information')
+                                // Timer Information
+                                Section::make('⏱️ Timer Information')
+                                    ->description('Real-time tracking of ticket duration')
                                     ->schema([
                                         ViewEntry::make('timer')
                                             ->view('livewire.ticket-timer')
                                             ->viewData(['record' => $this->record]),
                                     ])
                                     ->collapsible()
-                                    ->collapsed(false),
+                                    ->collapsed(false)
+                                    ->extraAttributes(['class' => 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200']),
 
-                                Section::make('Evidence Statistics')
+                                // Quick Stats
+                                Section::make('📊 Quick Statistics')
+                                    ->description('Key metrics and counts')
                                     ->schema([
-                                        \Filament\Infolists\Components\Grid::make(4)
+                                        Grid::make(2)
                                             ->schema([
-                                                TextEntry::make('evidence_stats.total_count')
-                                                    ->label('Total Files')
+                                                TextEntry::make('total_actions')
+                                                    ->label('Total Actions')
+                                                    ->getStateUsing(fn () => $this->record->actions()->count())
+                                                    ->badge()
+                                                    ->color('primary')
+                                                    ->icon('heroicon-m-list-bullet'),
+                                                
+                                                TextEntry::make('escalations_count')
+                                                    ->label('Escalations')
+                                                    ->getStateUsing(fn () => $this->record->actions()->where('Action_Taken', 'Escalation')->count())
+                                                    ->badge()
+                                                    ->color('warning')
+                                                    ->icon('heroicon-m-arrow-trending-up'),
+                                                
+                                                TextEntry::make('evidence_count')
+                                                    ->label('Evidence Files')
                                                     ->getStateUsing(fn () => $this->record->evidences()->count())
                                                     ->badge()
-                                                    ->color('primary'),
+                                                    ->color('info')
+                                                    ->icon('heroicon-m-paper-clip'),
+                                                
+                                                TextEntry::make('notes_count')
+                                                    ->label('Notes')
+                                                    ->getStateUsing(fn () => $this->record->actions()->where('Action_Taken', 'Note')->count())
+                                                    ->badge()
+                                                    ->color('success')
+                                                    ->icon('heroicon-m-pencil-square'),
+                                            ]),
+                                    ])
+                                    ->collapsible()
+                                    ->collapsed(false),
+
+                                // Evidence Statistics
+                                Section::make('📎 Evidence Overview')
+                                    ->description('File upload statistics and breakdown')
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
                                                 TextEntry::make('evidence_stats.images')
                                                     ->label('Images')
                                                     ->getStateUsing(fn () => $this->record->evidences()->where('file_type', 'image')->count())
                                                     ->badge()
-                                                    ->color('info'),
+                                                    ->color('info')
+                                                    ->icon('heroicon-m-photo'),
+                                                
                                                 TextEntry::make('evidence_stats.videos')
                                                     ->label('Videos')
                                                     ->getStateUsing(fn () => $this->record->evidences()->where('file_type', 'video')->count())
                                                     ->badge()
-                                                    ->color('warning'),
+                                                    ->color('warning')
+                                                    ->icon('heroicon-m-video-camera'),
+                                                
                                                 TextEntry::make('evidence_stats.documents')
                                                     ->label('Documents')
                                                     ->getStateUsing(fn () => $this->record->evidences()->where('file_type', 'document')->count())
                                                     ->badge()
-                                                    ->color('success'),
+                                                    ->color('success')
+                                                    ->icon('heroicon-m-document'),
+                                                
+                                                TextEntry::make('evidence_stats.total_size')
+                                                    ->label('Total Size')
+                                                    ->getStateUsing(function () {
+                                                        $totalSize = $this->record->evidences()->sum('file_size');
+                                                        if ($totalSize == 0) return '0 B';
+                                                        
+                                                        $units = ['B', 'KB', 'MB', 'GB'];
+                                                        for ($i = 0; $totalSize > 1024 && $i < count($units) - 1; $i++) {
+                                                            $totalSize /= 1024;
+                                                        }
+                                                        return round($totalSize, 2) . ' ' . $units[$i];
+                                                    })
+                                                    ->badge()
+                                                    ->color('gray')
+                                                    ->icon('heroicon-m-archive-box'),
                                             ]),
-                                        TextEntry::make('evidence_stats.total_size')
-                                            ->label('Total Size')
-                                            ->getStateUsing(function () {
-                                                $totalSize = $this->record->evidences()->sum('file_size');
-                                                $units = ['B', 'KB', 'MB', 'GB'];
-                                                for ($i = 0; $totalSize > 1024 && $i < count($units) - 1; $i++) {
-                                                    $totalSize /= 1024;
-                                                }
-                                                return round($totalSize, 2) . ' ' . $units[$i];
-                                            })
-                                            ->badge()
-                                            ->color('gray'),
                                     ])
                                     ->visible(fn () => $this->record->evidences()->count() > 0)
                                     ->collapsible()
                                     ->collapsed(false),
+
+                                // Timestamps
+                                Section::make('🕐 Important Timestamps')
+                                    ->description('Key dates and times')
+                                    ->schema([
+                                        TextEntry::make('Open_Time')
+                                            ->label('Opened At')
+                                            ->dateTime('M j, Y g:i A')
+                                            ->icon('heroicon-m-play-circle')
+                                            ->color('success'),
+                                        
+                                        TextEntry::make('Pending_Start')
+                                            ->label('Last Pending')
+                                            ->dateTime('M j, Y g:i A')
+                                            ->icon('heroicon-m-pause-circle')
+                                            ->color('warning')
+                                            ->visible(fn ($record) => $record->Pending_Start),
+                                        
+                                        TextEntry::make('Closed_Time')
+                                            ->label('Closed At')
+                                            ->dateTime('M j, Y g:i A')
+                                            ->icon('heroicon-m-check-circle')
+                                            ->color('danger')
+                                            ->visible(fn ($record) => $record->Closed_Time),
+                                    ])
+                                    ->collapsible()
+                                    ->collapsed(true),
                             ]),
 
-                        // Evidence Files section below the main content, spanning full width
-                        Section::make('Evidence Files')
+                        // Evidence Files Section (Full Width)
+                        Section::make('📂 Evidence Files')
+                            ->description('All uploaded evidence files and documentation')
                             ->schema([
                                 ViewEntry::make('evidence_management')
                                     ->view('filament.components.ticket-evidences')
@@ -693,19 +891,22 @@ class ViewTicket extends ViewRecord
                                     ])
                                     ->columnSpanFull(),
                             ])
+                            ->columnSpan(['default' => 12])
                             ->collapsible()
                             ->collapsed(fn () => $this->record->evidences()->count() === 0)
                             ->visible(fn () => $this->record->evidences()->count() > 0)
                             ->headerActions([
                                 \Filament\Infolists\Components\Actions\Action::make('uploadMore')
-                                    ->label('Upload More')
+                                    ->label('Upload More Files')
                                     ->icon('heroicon-m-plus')
                                     ->color('primary')
+                                    ->button()
                                     ->action(function () {
                                         $this->mountAction('uploadEvidence');
                                     }),
                             ])
-                            ->extraAttributes(['class' => 'mt-6']),
+                            ->extraAttributes(['class' => 'mt-6 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200'])
+                            ->icon('heroicon-m-folder-open'),
                     ]),
             ]);
     }

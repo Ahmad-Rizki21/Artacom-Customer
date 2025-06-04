@@ -37,3 +37,10 @@
 
 ## [1.0.0] - 2025-05-27
 - Initial release.
+
+## [1.1.1] - 2025-06-04
+- Update Changelog.
+
+### Added
+- Update Simcard Import CSV - DONE
+- Update Historyal SimCrad - DONE

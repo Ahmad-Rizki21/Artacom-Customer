@@ -65,8 +65,8 @@ npm install && npm run build
 cp .env.example .env
 php artisan key:generate
 
-# Migrasi dan seeder
-php artisan migrate --seed
+# # Migrasi dan seeder
+# php artisan migrate --seed
 
 # Jalankan queue listener (untuk import/export)
 php artisan queue:listen

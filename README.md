@@ -1,61 +1,218 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🎫 Helpdesk & Inventory Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistem berbasis web yang dibangun menggunakan **Laravel 12** dan **Filament v3** untuk membantu organisasi dalam mengelola:
 
-## About Laravel
+- 🎟️ Tiket layanan pelanggan (Helpdesk Ticketing)
+- 👥 Data dan histori pelanggan (Customer Tracking)
+- 🧰 Inventarisasi perangkat (Inventory Management)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Dirancang untuk meningkatkan efisiensi layanan, respons terhadap permintaan pengguna, dan pengelolaan aset TI organisasi.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 🚀 Fitur Unggulan
 
-## Learning Laravel
+- 🔐 **Manajemen Role & Akses Pengguna**  
+  Kelola hak akses berbasis role menggunakan **Spatie Permission** atau **Filament Shield**.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- 💻 **Manajemen Perangkat (Inventory CRUD)**  
+  Tambah, ubah, hapus, dan pantau perangkat/alat secara menyeluruh.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- 🆘 **Sistem Helpdesk Ticketing + SLA Timer**  
+  Kelola tiket dan pantau waktu tanggap sesuai SLA (Service Level Agreement).
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- 📥 **Import / Export Excel**  
+  Kelola data masal dengan fitur import dan export melalui background queue.
 
-## Laravel Sponsors
+- 🧑‍🤝‍🧑 **Manajemen Pengguna Lengkap**  
+  Kontrol penuh atas pengguna dan hak aksesnya.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- 🧾 **Ekspor PDF Tiket**  
+  Cetak detail tiket dalam bentuk PDF untuk dokumentasi atau laporan.
 
-### Premium Partners
+- 🕓 **Riwayat Pembaruan (Audit Trail)**  
+  Pantau histori aktivitas atau perubahan dari setiap data.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development/)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+## ⚙️ Teknologi yang Digunakan
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+| Komponen     | Teknologi                |
+|--------------|---------------------------|
+| Framework    | Laravel 12                |
+| UI Admin     | Filament v3               |
+| Basis Data   | MySQL                     |
+| Web Server   | Apache                    |
+| Bahasa       | PHP >= 8.3                |
+| Frontend     | Vite (dengan Laravel Mix) |
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 🧑‍💻 Instalasi Lokal
 
-## Security Vulnerabilities
+Ikuti langkah-langkah berikut untuk menjalankan proyek secara lokal:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+# Clone repo
+git Clone https://github.com/Ahmad-Rizki21/Artacom-Customer.git
+cd nama-project
 
-## License
+# Instal dependency backend & frontend
+composer install
+npm install && npm run build
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Konfigurasi environment
+cp .env.example .env
+php artisan key:generate
+
+# Migrasi dan seeder
+php artisan migrate --seed
+
+# Jalankan queue listener (untuk import/export)
+php artisan queue:listen
+
+# Jalankan server lokal
+php artisan serve
+```
+
+> 💡 Pastikan database MySQL telah dibuat dan dikonfigurasi di file `.env`.
+
+---
+
+## 🌐 Panduan Deploy ke Server Ubuntu
+
+### 1. Instalasi Paket Server
+
+```bash
+sudo apt update
+sudo apt install apache2 mysql-server php php-cli php-mysql \
+php-curl php-mbstring php-xml php-bcmath unzip curl git composer \
+nodejs npm
+```
+
+### 2. Clone & Setup Project
+
+```bash
+cd /var/www/
+sudo git clone https://github.com/Ahmad-Rizki21/Artacom-Customer.git
+cd nama-project
+sudo chown -R www-data:www-data .
+```
+
+### 3. Setup Laravel
+
+```bash
+composer install
+npm install && npm run build
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan storage:link
+```
+
+### 4. Konfigurasi Virtual Host Apache
+
+```bash
+sudo nano /etc/apache2/sites-available/helpdesk.conf
+```
+
+Isi file:
+
+```apacheconf
+<VirtualHost *:80>
+    ServerName yourdomain.com
+    DocumentRoot /var/www/nama-project/public
+
+    <Directory /var/www/nama-project/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/helpdesk_error.log
+    CustomLog ${APACHE_LOG_DIR}/helpdesk_access.log combined
+</VirtualHost>
+```
+
+Aktifkan dan restart Apache:
+
+```bash
+sudo a2ensite helpdesk.conf
+sudo a2enmod rewrite
+sudo systemctl restart apache2
+```
+
+---
+
+## 🔁 Menjalankan Queue Worker di Server
+
+Gunakan supervisor untuk menjalankan queue secara otomatis:
+
+### File konfigurasi supervisor `/etc/supervisor/conf.d/queue-worker.conf`
+
+```ini
+[program:laravel-queue-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/nama-project/artisan queue:work --sleep=3 --tries=3 --timeout=90
+autostart=true
+autorestart=true
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/nama-project/storage/logs/laravel-queue.log
+stopwaitsecs=3600
+```
+
+### Jalankan Supervisor
+
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start laravel-queue-worker:*
+```
+
+---
+
+## 📄 Contoh `.env.example`
+
+```dotenv
+APP_NAME="Helpdesk App"
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost
+
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=helpdesk_db
+DB_USERNAME=root
+DB_PASSWORD=
+
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=smtp
+MAIL_HOST=mailhog
+MAIL_PORT=1025
+MAIL_FROM_ADDRESS=admin@example.com
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+---
+
+## 🤝 Kontribusi
+
+- Laporkan bug atau request fitur di [Issues](https://github.com/Ahmad-Rizki21/Artacom-Customer/issues)
+- Kirim Pull Request jika ingin menambahkan fitur atau perbaikan
+
+---
+
+## 📜 Lisensi
+
+Proyek ini berada di bawah lisensi [MIT License](LICENSE).
+
+---
+
+> Dibuat dengan ❤️ oleh tim developer by Ahmad Rizki, menggunakan Laravel dan Filament.

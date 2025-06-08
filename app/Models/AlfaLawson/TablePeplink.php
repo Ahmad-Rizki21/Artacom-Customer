@@ -26,22 +26,42 @@ class TablePeplink extends Model
 
     protected $dates = ['tgl_beli'];
 
-    // Mutator to clean SN before saving (remove dashes)
+    // Mutator to format SN with dashes if not already present
     public function setSNAttribute($value)
     {
-        $this->attributes['SN'] = preg_replace('/[^A-Za-z0-9]/', '', $value);
+        $value = strtoupper($value); // Ubah ke uppercase
+
+        if (strlen($value) === 12 && strpos($value, '-') === false) {
+            $value = substr($value, 0, 4) . '-' . substr($value, 4, 4) . '-' . substr($value, 8, 4);
+        }
+
+        $this->attributes['SN'] = $value;
     }
 
-    // Accessor to format SN for display with dashes
+    // Accessor to return SN as is
     public function getSNAttribute($value)
     {
-        if (strlen($value) === 12) {
-            return substr($value, 0, 4) . '-' . substr($value, 4, 4) . '-' . substr($value, 8, 4);
-        }
         return $value;
     }
 
-    // Ensure route key uses the raw SN value (without formatting)
+    // Override resolveRouteBinding to handle SN with or without dashes
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $field = $field ?: $this->getRouteKeyName();
+        $cleanedValue = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $value));
+
+        // Coba cari dengan SN tanpa dash
+        $record = $this->where($field, $cleanedValue)->first();
+
+        if (!$record) {
+            // Jika tidak ketemu, coba cari dengan SN dengan dash
+            $record = $this->where($field, strtoupper($value))->first();
+        }
+
+        return $record ?? abort(404);
+    }
+
+    // Ensure route key uses the raw SN value (with dashes if present)
     public function getRouteKey()
     {
         return $this->getRawOriginal('SN') ?? $this->attributes['SN'];
@@ -56,9 +76,22 @@ class TablePeplink extends Model
     {
         static::created(function ($peplink) {
             try {
+                $sn = $peplink->SN;
+
+                Log::info('Creating TablePeplinkHistory with SN: ' . $sn, [
+                    'attributes' => $peplink->getAttributes(),
+                ]);
+
+                if (!$sn) {
+                    Log::warning('SN is null during create for TablePeplink', [
+                        'attributes' => $peplink->getAttributes(),
+                    ]);
+                    return;
+                }
+
                 if (class_exists('App\Models\AlfaLawson\TablePeplinkHistory')) {
                     TablePeplinkHistory::create([
-                        'peplink_sn' => $peplink->getRawOriginal('SN'),
+                        'peplink_sn' => $sn,
                         'action' => 'created',
                         'status' => $peplink->Status,
                         'note' => 'Perangkat baru ditambahkan.',
@@ -70,7 +103,7 @@ class TablePeplink extends Model
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to log history on create for TablePeplink', [
-                    'SN' => $peplink->getRawOriginal('SN'),
+                    'SN' => $sn ?? 'unknown',
                     'error' => $e->getMessage(),
                 ]);
             }

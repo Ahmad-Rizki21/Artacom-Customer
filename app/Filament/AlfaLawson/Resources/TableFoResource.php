@@ -167,6 +167,12 @@ class TableFoResource extends Resource
                     ->sortable()
                     ->icon('heroicon-o-building-storefront'),
 
+                Tables\Columns\TextColumn::make('Site_ID')
+                    ->label('Site ID')
+                    ->searchable()
+                    ->sortable()
+                    ->icon('heroicon-o-map'),
+
                 Tables\Columns\TextColumn::make('remote.DC')
                     ->label('Distribution Center')
                     ->searchable()

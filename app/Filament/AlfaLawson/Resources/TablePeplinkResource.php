@@ -193,9 +193,8 @@ class TablePeplinkResource extends Resource
                     ->icon('heroicon-o-user-group')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'ALFA' => 'success',
-                        'SEWA' => 'warning',
-                        'CUSTOMER' => 'info',
+                        'ORIX' => 'success',
+                        'TRANSTEL' => 'warning',
                         'JEDI' => 'primary',
                         'ARTACOM' => 'secondary',
                         default => 'secondary',
@@ -265,11 +264,10 @@ class TablePeplinkResource extends Resource
                 SelectFilter::make('Kepemilikan')
                     ->label('Filter Ownership')
                     ->options([
-                        'ALFA' => 'ALFA',
-                        'SEWA' => 'SEWA',
-                        'CUSTOMER' => 'CUSTOMER',
-                        'JEDI' => 'secondary',
-                        'ARTACOM' => 'secondary',
+                        'ARTACOM' => 'ARTACOM',
+                        'JEDI' => 'JEDI',
+                        'TRANSTEL' => 'TRANSTEL',
+                        'ORIX' => 'ORIX',
                     ]),
             ])
             ->actions([

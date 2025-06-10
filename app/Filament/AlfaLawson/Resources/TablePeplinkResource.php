@@ -85,9 +85,8 @@ class TablePeplinkResource extends Resource
                                             Forms\Components\Select::make('Kepemilikan')
                                                 ->label('Ownership')
                                                 ->options([
-                                                    'ALFA' => 'ALFA',
-                                                    'SEWA' => 'SEWA',
-                                                    'CUSTOMER' => 'CUSTOMER',
+                                                    'ORIX' => 'ORIX',
+                                                    'TRANSTEL' => 'TRANSTEL',
                                                     'JEDI' => 'JEDI',
                                                     'ARTACOM' => 'ARTACOM',
                                                 ])

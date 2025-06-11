@@ -13,6 +13,7 @@
         "barryvdh/laravel-snappy": "^1.0",
         "bezhansalleh/filament-shield": "^3.3",
         "blade-ui-kit/blade-heroicons": "^2.6",
+        "charrafimed/global-search-modal": "^3.7",
         "cheesegrits/filament-google-maps": "^3.0",
         "codewithdennis/filament-simple-map": "^3.0",
         "cornford/googlmapper": "^2.8",

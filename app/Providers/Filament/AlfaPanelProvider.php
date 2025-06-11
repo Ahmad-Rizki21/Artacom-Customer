@@ -24,6 +24,7 @@ use App\Filament\AlfaLawson\Widgets\MonthlyTicketChart;
 use App\Filament\AlfaLawson\Widgets\StatsAlfaLawsonRemoteOverview;
 use Filament\Facades\Filament;
 
+use CharrafiMed\GlobalSearchModal\GlobalSearchModalPlugin;
 use App\Filament\AlfaLawson\Widgets\DCMapWidget;
 use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
 use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
@@ -169,8 +170,9 @@ class AlfaPanelProvider extends PanelProvider
                 FilamentBackgroundsPlugin::make()
                 ->showAttribution(false),
                 FilamentApexChartsPlugin::make(),
-                FilamentEditProfilePlugin::make()
-        
+                FilamentEditProfilePlugin::make(),
+                GlobalSearchModalPlugin::make()
+                ->highlighter(false)
             ]);
             
     }

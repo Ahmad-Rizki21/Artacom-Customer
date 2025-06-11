@@ -8,6 +8,7 @@ use Illuminate\Support\ServiceProvider;
 use Carbon\Carbon;
 use Livewire\Livewire;
 use App\Livewire\TicketTimeline;
+use Illuminate\Database\Eloquent\Model;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +29,6 @@ class AppServiceProvider extends ServiceProvider
         Carbon::setLocale('id');
             date_default_timezone_set(config('app.timezone'));
             Livewire::component('ticket-timeline', TicketTimeline::class);
-
+        Model::preventLazyLoading();
     }
 }

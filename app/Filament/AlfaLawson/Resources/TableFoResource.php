@@ -146,6 +146,10 @@ class TableFoResource extends Resource
                             ->schema([
                                 Placeholder::make('HistoryList')
                                     ->content(function ($record) {
+                                        // Check if record is null and provide a fallback
+                                        if (!$record) {
+                                            return view('filament.pages.fo-history', ['histories' => []]);
+                                        }
                                         $record->load('histories');
                                         return view('filament.pages.fo-history', ['histories' => $record->histories ?? []]);
                                     })
@@ -172,13 +176,13 @@ class TableFoResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->copyable()
-                    ->copyMessage('Connection BUD copied')
-                    ->icon('heroicon-o-identification'),
+                    ->copyMessage('Connection BUD copied'),
+                    // ->icon('heroicon-o-identification'),
 
                 Tables\Columns\TextColumn::make('Provider')
                     ->searchable()
-                    ->sortable()
-                    ->icon('heroicon-o-building-office'),
+                    ->sortable(),
+                    // ->icon(icon: 'heroicon-o-building-office'),
 
                 Tables\Columns\TextColumn::make('remote.Nama_Toko')
                     ->label('Location')
@@ -206,7 +210,7 @@ class TableFoResource extends Resource
                         'gray' => 'Not Active',
                     ]),
             ])
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('remote.DC', 'asc') // Changed to sort by DC ascending
             ->filters([
                 Tables\Filters\SelectFilter::make('Status')
                     ->options([

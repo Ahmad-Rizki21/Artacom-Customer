@@ -29,7 +29,7 @@ class TablePeplink extends Model
     // Mutator to format SN with dashes if not already present
     public function setSNAttribute($value)
     {
-        $value = strtoupper($value); // Ubah ke uppercase
+        $value = strtoupper($value);
 
         if (strlen($value) === 12 && strpos($value, '-') === false) {
             $value = substr($value, 0, 4) . '-' . substr($value, 4, 4) . '-' . substr($value, 8, 4);
@@ -50,11 +50,9 @@ class TablePeplink extends Model
         $field = $field ?: $this->getRouteKeyName();
         $cleanedValue = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $value));
 
-        // Coba cari dengan SN tanpa dash
         $record = $this->where($field, $cleanedValue)->first();
 
         if (!$record) {
-            // Jika tidak ketemu, coba cari dengan SN dengan dash
             $record = $this->where($field, strtoupper($value))->first();
         }
 
@@ -163,11 +161,6 @@ class TablePeplink extends Model
                 ]);
             }
         });
-    }
-
-    public function remote()
-    {
-        return $this->belongsTo(TableRemote::class, 'Site_ID', 'Site_ID');
     }
 
     public function histories()

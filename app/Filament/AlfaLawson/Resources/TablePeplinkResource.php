@@ -4,7 +4,6 @@ namespace App\Filament\AlfaLawson\Resources;
 
 use App\Filament\AlfaLawson\Resources\TablePeplinkResource\Pages;
 use App\Models\AlfaLawson\TablePeplink;
-use App\Models\AlfaLawson\TableRemote;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -15,8 +14,6 @@ use Filament\Forms\Components\Grid;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
 use App\Filament\Imports\TablePeplinkImportImporter;
-use Illuminate\Database\Eloquent\Model;
-
 class TablePeplinkResource extends Resource
 {
     protected static ?string $model = TablePeplink::class;
@@ -29,9 +26,6 @@ class TablePeplinkResource extends Resource
 
     public static function form(Form $form): Form
     {
-        // Ambil daftar Site_ID dari TableRemote untuk dropdown
-        $siteOptions = TableRemote::pluck('Site_ID', 'Site_ID')->toArray();
-
         $mainSchema = fn (string $operation) => [
             Forms\Components\Tabs::make('Tabs')
                 ->tabs([
@@ -76,7 +70,7 @@ class TablePeplinkResource extends Resource
                                                 ->required()
                                                 ->prefixIcon('heroicon-o-calendar')
                                                 ->helperText('Tanggal pembelian perangkat.')
-                                                ->default(now()), // Default ke tanggal dan waktu saat ini (5 Juni 2025, 13:31 WIB)
+                                                ->default(now()), // Default ke tanggal dan waktu saat ini (10 Juni 2025, 13:58 WIB)
                                             Forms\Components\TextInput::make('garansi')
                                                 ->label('Warranty')
                                                 ->prefixIcon('heroicon-o-shield-check')
@@ -93,19 +87,12 @@ class TablePeplinkResource extends Resource
                                                 ->required()
                                                 ->prefixIcon('heroicon-o-user-group')
                                                 ->helperText('Pilih kepemilikan perangkat.'),
-                                            Forms\Components\Select::make('Site_ID')
+                                            Forms\Components\TextInput::make('Site_ID')
                                                 ->label('Site ID')
-                                                ->options($siteOptions)
-                                                ->required()
+                                                ->nullable() // Izinkan null
                                                 ->prefixIcon('heroicon-m-building-storefront')
-                                                ->helperText('Pilih lokasi toko terkait perangkat.')
-                                                ->searchable()
-                                                ->nullable() // Izinkan null jika tidak ada Site_ID valid
-                                                ->afterStateHydrated(function ($component, $state, $record) {
-                                                    if ($record && !$record->remote) {
-                                                        $component->state(null); // Set null jika tidak ada relasi
-                                                    }
-                                                }),
+                                                ->helperText('Masukkan ID lokasi toko terkait perangkat (kosongkan jika belum terpasang).')
+                                                ->maxLength(8),
                                         ]),
                                 ]),
                             Section::make('Status and Description')
@@ -121,6 +108,7 @@ class TablePeplinkResource extends Resource
                                                     'Rusak' => 'Rusak',
                                                     'Sparepart' => 'Sparepart',
                                                     'Perbaikan' => 'Perbaikan',
+                                                    'Hilang' => 'Hilang',
                                                     'Tidak Bisa Diperbaiki' => 'Tidak Bisa Diperbaiki',
                                                 ])
                                                 ->default('Operasional')
@@ -204,9 +192,6 @@ class TablePeplinkResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->wrap()
-                    ->tooltip(fn ($record) => $record->remote
-                        ? "Toko: {$record->remote->Nama_Toko} " . ($record->remote->Lokasi_Tambahan ? "- {$record->remote->Lokasi_Tambahan}" : '')
-                        : 'Tidak ada lokasi')
                     ->icon('heroicon-m-building-storefront')
                     ->toggleable(),
                 TextColumn::make('tgl_beli')
@@ -223,6 +208,8 @@ class TablePeplinkResource extends Resource
                     ->toggledHiddenByDefault(),
                 TextColumn::make('Status')
                     ->badge()
+                    ->searchable()
+                    ->sortable()
                     ->color(fn (string $state): string => match ($state) {
                         'Operasional' => 'success',
                         'Rusak' => 'danger',

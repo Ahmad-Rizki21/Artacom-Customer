@@ -10,20 +10,14 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Tabs;
-use Filament\Forms\Components\Tabs\Tab;
+use Filament\Forms\Components\Tab;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Actions\ImportAction;
 use App\Filament\Imports\TableRemoteImportImporter;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Color;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
+use Filament\Tables\Actions\ExportAction;
+use App\Filament\Exports\TableRemoteExporter;
 
 class TableRemoteResource extends Resource
 {
@@ -39,7 +33,7 @@ class TableRemoteResource extends Resource
             ->schema([
                 Tabs::make('Tabs')
                     ->tabs([
-                        Tab::make('Details')
+                        Tabs::make('Details')
                             ->schema([
                                 Section::make('Site Information')
                                     ->description('Provide general information about the site.')
@@ -132,7 +126,7 @@ class TableRemoteResource extends Resource
                                             ->columnSpanFull(),
                                     ]),
                             ]),
-                        Tab::make('History')
+                        Tabs::make('History')
                             ->schema([
                                 Placeholder::make('HistoryList')
                                     ->content(function ($record) {
@@ -319,132 +313,13 @@ class TableRemoteResource extends Resource
                 Tables\Actions\EditAction::make(),
             ])
             ->headerActions([
-                Tables\Actions\Action::make('export')
+                ExportAction::make()
+                    ->exporter(TableRemoteExporter::class)
                     ->label('Export to Excel')
                     ->icon('heroicon-o-arrow-down-on-square')
                     ->color('success')
-                    ->action(function () {
-                        Log::info('TableRemoteResource: Starting export action with PhpSpreadsheet');
-
-                        try {
-                            $spreadsheet = new Spreadsheet();
-                            $sheet = $spreadsheet->getActiveSheet();
-
-                            // Set headers
-                            $headers = [
-                                'Site ID',
-                                'Nama Toko',
-                                'Distribution Center',
-                                'IP Address',
-                                'VLAN',
-                                'Controller',
-                                'Customer',
-                                'Online Date',
-                                'Connection Type',
-                                'Status',
-                                'Remarks',
-                            ];
-                            $sheet->fromArray($headers, null, 'A1');
-
-                            // Set data
-                            $data = TableRemote::all()->map(function ($row) {
-                                return [
-                                    $row->Site_ID ?? '-',
-                                    strtoupper($row->Nama_Toko ?? '-'),
-                                    $row->DC ?? '-',
-                                    $row->IP_Address ?? '-',
-                                    $row->Vlan ?? '-',
-                                    $row->Controller ?? '-',
-                                    $row->Customer ?? '-',
-                                    $row->Online_Date ? \Carbon\Carbon::parse($row->Online_Date)->format('d/m/Y') : '-',
-                                    match ($row->Link) {
-                                        'FO-GSM' => '✅ FO-GSM',
-                                        'SINGLE-GSM' => '🔵 SINGLE-GSM',
-                                        'DUAL-GSM' => '🟡 DUAL-GSM',
-                                        default => $row->Link ?? '-'
-                                    },
-                                    '✓ ' . ($row->Status ?? '-'),
-                                    $row->Keterangan ?? '-',
-                                ];
-                            })->toArray();
-                            $sheet->fromArray($data, null, 'A2');
-
-                            // Apply styles
-                            $highestRow = $sheet->getHighestRow();
-
-                            // Header style
-                            $sheet->getStyle('A1:K1')->applyFromArray([
-                                'font' => [
-                                    'bold' => true,
-                                    'color' => ['argb' => Color::COLOR_WHITE],
-                                    'size' => 12,
-                                ],
-                                'fill' => [
-                                    'fillType' => Fill::FILL_SOLID,
-                                    'startColor' => ['argb' => 'FF006400'], // Dark green
-                                ],
-                                'alignment' => [
-                                    'horizontal' => Alignment::HORIZONTAL_CENTER,
-                                    'vertical' => Alignment::VERTICAL_CENTER,
-                                    'wrapText' => true,
-                                ],
-                                'borders' => [
-                                    'allBorders' => [
-                                        'borderStyle' => Border::BORDER_THIN,
-                                        'color' => ['argb' => Color::COLOR_BLACK],
-                                    ],
-                                ],
-                            ]);
-
-                            // Data rows style
-                            for ($row = 2; $row <= $highestRow; $row++) {
-                                $fillColor = ($row % 2 === 0) ? 'FFDFECDB' : 'FFFFFFFF'; // Light green for even, white for odd
-                                if (strpos($sheet->getCell("I{$row}")->getValue(), 'FO-GSM') !== false) {
-                                    $fillColor = 'FFFFF5D7'; // Light yellow for FO-GSM
-                                }
-                                $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
-                                    'alignment' => [
-                                        'horizontal' => Alignment::HORIZONTAL_CENTER,
-                                        'vertical' => Alignment::VERTICAL_CENTER,
-                                        'wrapText' => true,
-                                    ],
-                                    'borders' => [
-                                        'allBorders' => [
-                                            'borderStyle' => Border::BORDER_THIN,
-                                            'color' => ['argb' => Color::COLOR_BLACK],
-                                        ],
-                                    ],
-                                    'fill' => [
-                                        'fillType' => Fill::FILL_SOLID,
-                                        'startColor' => ['argb' => $fillColor],
-                                    ],
-                                ]);
-                            }
-
-                            // Auto-size columns
-                            foreach (range('A', 'K') as $col) {
-                                $sheet->getColumnDimension($col)->setAutoSize(true);
-                            }
-
-                            // Save and download
-                            $filePath = storage_path('app/public/TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx');
-                            $writer = new Xlsx($spreadsheet);
-                            $writer->save($filePath);
-
-                            Log::info('TableRemoteResource: Export completed', ['file' => $filePath]);
-
-                            return response()->download($filePath, 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx', [
-                                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            ])->deleteFileAfterSend(true);
-                        } catch (\Exception $e) {
-                            Log::error('TableRemoteResource: Export failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-                            Notification::make()
-                                ->title('Export Failed')
-                                ->body('An error occurred while exporting: ' . $e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                    ->fileName(fn () => 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx')
+                    ->chunkSize(1000),
                 ImportAction::make()
                     ->importer(TableRemoteImportImporter::class)
                     ->label('Import from Excel')
@@ -471,7 +346,7 @@ class TableRemoteResource extends Resource
                         ];
 
                         $filePath = storage_path('app/public/TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
-                        $spreadsheet = new Spreadsheet();
+                        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                         $sheet = $spreadsheet->getActiveSheet();
                         $sheet->fromArray($headers, null, 'A1');
 
@@ -493,10 +368,10 @@ class TableRemoteResource extends Resource
                         // Apply basic styles
                         $sheet->getStyle('A1:K1')->applyFromArray([
                             'font' => ['bold' => true],
-                            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
                         ]);
 
-                        $writer = new Xlsx($spreadsheet);
+                        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                         $writer->save($filePath);
 
                         return response()->download($filePath, 'TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [

@@ -11,11 +11,13 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use App\Filament\Exports\TableFoExporter;
+use App\Filament\Exports\TableFoExcelExport;
 use App\Filament\Imports\TableFoImporter;
 use Filament\Forms\Components\Tabs;
 use Filament\Forms\Components\Tabs\Tab;
 use Filament\Forms\Components\Placeholder;
+use Maatwebsite\Excel\Facades\Excel;
+use Filament\Tables\Actions\Action;
 
 class TableFoResource extends Resource
 {
@@ -25,7 +27,7 @@ class TableFoResource extends Resource
     protected static ?int $navigationSort = 2;
     protected static ?string $modelLabel = 'Fiber Optic';
     protected static ?string $pluralModelLabel = 'Fiber Optic Connections';
-    protected static ?string $recordTitleAttribute = 'ID'; // Use ID as the record title
+    protected static ?string $recordTitleAttribute = 'ID';
 
     public static function form(Form $form): Form
     {
@@ -49,7 +51,6 @@ class TableFoResource extends Resource
                                                     ->prefixIcon('heroicon-o-identification')
                                                     ->prefixIconColor('primary')
                                                     ->autofocus()
-                                                    ->reactive()
                                                     ->helperText('Unique identifier for the fiber optic connection.')
                                                     ->validationMessages([
                                                         'required' => 'Connection ID is required.',
@@ -146,7 +147,6 @@ class TableFoResource extends Resource
                             ->schema([
                                 Placeholder::make('HistoryList')
                                     ->content(function ($record) {
-                                        // Check if record is null and provide a fallback
                                         if (!$record) {
                                             return view('filament.pages.fo-history', ['histories' => []]);
                                         }
@@ -176,13 +176,16 @@ class TableFoResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->copyable()
-                    ->copyMessage('Connection BUD copied'),
-                    // ->icon('heroicon-o-identification'),
+                    ->copyMessage('Connection ID copied'),
 
                 Tables\Columns\TextColumn::make('Provider')
                     ->searchable()
                     ->sortable(),
-                    // ->icon(icon: 'heroicon-o-building-office'),
+
+                Tables\Columns\TextColumn::make('Register_Name')
+                    ->label('Register Name')
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('remote.Nama_Toko')
                     ->label('Location')
@@ -210,18 +213,48 @@ class TableFoResource extends Resource
                         'gray' => 'Not Active',
                     ]),
             ])
-            ->defaultSort('remote.DC', 'asc') // Changed to sort by DC ascending
+            ->defaultSort('remote.DC', 'asc')
             ->filters([
+                Tables\Filters\SelectFilter::make('DC')
+                    ->label('Distribution Center')
+                    ->options(function () {
+                        return TableRemote::distinct()
+                            ->pluck('DC', 'DC')
+                            ->filter()
+                            ->sort()
+                            ->mapWithKeys(fn ($dc) => [$dc => ucfirst(strtolower($dc))])
+                            ->toArray();
+                    })
+                    ->multiple()
+                    ->searchable()
+                    ->placeholder('Select Distribution Center'),
+
+                Tables\Filters\SelectFilter::make('remote.Customer')
+                    ->label('Customer')
+                    ->options(function () {
+                        return TableFo::query()
+                            ->join('table_remote', 'table_fo.Site_ID', '=', 'table_remote.Site_ID')
+                            ->where('table_remote.Link', 'FO-GSM')
+                            ->distinct()
+                            ->pluck('table_remote.Customer', 'table_remote.Customer')
+                            ->toArray();
+                    })
+                    ->searchable()
+                    ->indicator('Customer')
+                    ->multiple(),
+
                 Tables\Filters\SelectFilter::make('Status')
                     ->options([
-                        'Active' => 'Active',
-                        'Dismantle' => 'Dismantle',
-                        'Suspend' => 'Suspend',
-                        'Not Active' => 'Not Active',
+                        'Active' => 'Aktif',
+                        'Dismantle' => 'Dibongkar',
+                        'Suspend' => 'Tertunda',
+                        'Not Active' => 'Tidak Aktif',
                     ])
-                    ->indicator('Status'),
+                    ->indicator('Status')
+                    ->multiple(),
 
                 Tables\Filters\SelectFilter::make('Provider')
+                    ->label('Provider')
                     ->options(function () {
                         return TableFo::query()
                             ->distinct()
@@ -229,28 +262,79 @@ class TableFoResource extends Resource
                             ->toArray();
                     })
                     ->searchable()
-                    ->indicator('Provider'),
-
-                Tables\Filters\SelectFilter::make('DC')
-                    ->options(function () {
-                        return TableRemote::query()
-                            ->where('Link', 'FO-GSM')
-                            ->distinct()
-                            ->pluck('DC', 'DC')
-                            ->toArray();
-                    })
-                    ->searchable()
-                    ->indicator('Distribution Center'),
+                    ->indicator('Provider')
+                    ->multiple(),
             ])
-            ->filtersFormColumns(3)
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+            ->filtersFormColumns(4)
+            ->filtersTriggerAction(
+                fn (Tables\Actions\Action $action) => $action
+                    ->button()
+                    ->label('Filter')
+                    ->icon('heroicon-o-funnel')
+                    ->color('primary')
+            )
             ->headerActions([
-                Tables\Actions\ExportAction::make()
-                    ->exporter(TableFoExporter::class)
+                Action::make('exportExcel')
                     ->label('Export to Excel')
-                    ->icon('heroicon-o-arrow-down-on-square')
+                    ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
-                    ->fileName(fn () => 'TableFo_Export_' . now()->format('Ymd_His') . '.xlsx')
-                    ->chunkSize(1000),
+                    ->action(function ($livewire) {
+                        $query = TableFo::query()
+                            ->with('remote')
+                            ->whereHas('remote', function ($query) {
+                                $query->where('Link', 'FO-GSM');
+                            });
+
+                        // Apply all active filters
+                        foreach ($livewire->tableFilters as $filter => $value) {
+                            if (!empty($value['values'])) {
+                                if ($filter === 'DC') {
+                                    $query->whereHas('remote', function (Builder $query) use ($value) {
+                                        $query->whereIn('DC', (array)$value['values']);
+                                    });
+                                } elseif ($filter === 'remote.Customer') {
+                                    $query->whereHas('remote', function (Builder $query) use ($value) {
+                                        $query->whereIn('Customer', (array)$value['values']);
+                                    });
+                                } elseif ($filter === 'Status') {
+                                    $query->whereIn('Status', (array)$value['values']);
+                                } elseif ($filter === 'Provider') {
+                                    $query->whereIn('Provider', (array)$value['values']);
+                                }
+                            }
+                        }
+
+                        // Apply search query if present
+                        if ($livewire->tableSearch) {
+                            $query->where(function ($q) use ($livewire) {
+                                $q->where('CID', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Provider', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Register_Name', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Site_ID', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhereHas('remote', function ($q) use ($livewire) {
+                                      $q->where('Nama_Toko', 'like', '%' . $livewire->tableSearch . '%')
+                                        ->orWhere('DC', 'like', '%' . $livewire->tableSearch . '%');
+                                  });
+                            });
+                        }
+
+                        // Apply sorting if present
+                        if ($livewire->tableSortColumn) {
+                            if ($livewire->tableSortColumn === 'remote.Nama_Toko' || $livewire->tableSortColumn === 'remote.DC') {
+                                $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
+                            } else {
+                                $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
+                            }
+                        }
+
+                        return Excel::download(
+                            new TableFoExcelExport($query),
+                            'fo_export_' . now()->format('Ymd_His') . '.xlsx'
+                        );
+                    })
+                    ->tooltip('Export filtered data to Excel'),
+
                 Tables\Actions\ImportAction::make()
                     ->importer(TableFoImporter::class)
                     ->label('Import from Excel')
@@ -270,27 +354,30 @@ class TableFoResource extends Resource
                             'Status',
                         ];
 
-                        $filePath = storage_path('app/public/TableFO_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
-                        $writer = new \OpenSpout\Writer\XLSX\Writer();
-                        $writer->openToFile($filePath);
-
-                        $sheet = $writer->getCurrentSheet();
-                        $row = \OpenSpout\Common\Entity\Row::fromValues($headers);
-                        $writer->addRow($row);
+                        $filePath = storage_path('app/public/TableFo_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
+                        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                        $sheet = $spreadsheet->getActiveSheet();
+                        $sheet->fromArray($headers, null, 'A1');
 
                         $sampleRow = [
                             'FO123456',
                             'ICON+',
                             'ALFAMART CIKARANG',
-                            'CD27',  // This should be a valid Site_ID from table_remote
+                            'CD27',
                             'Active',
                         ];
-                        $row = \OpenSpout\Common\Entity\Row::fromValues($sampleRow);
-                        $writer->addRow($row);
+                        $sheet->fromArray([$sampleRow], null, 'A2');
 
-                        $writer->close();
+                        // Apply basic styles
+                        $sheet->getStyle('A1:E1')->applyFromArray([
+                            'font' => ['bold' => true],
+                            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+                        ]);
 
-                        return response()->download($filePath, 'TableFO_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
+                        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+                        $writer->save($filePath);
+
+                        return response()->download($filePath, 'TableFo_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
                             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         ])->deleteFileAfterSend(true);
                     })

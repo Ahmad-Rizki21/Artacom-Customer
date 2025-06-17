@@ -14,11 +14,12 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Tabs;
 use Filament\Forms\Components\Group;
-// Impor yang benar untuk TableSimcardImportImporter
 use App\Filament\Imports\TableSimcardImportImporter;
-// Impor yang benar untuk XLSXWriter dan Row
 use OpenSpout\Writer\XLSX\Writer as XLSXWriter;
 use OpenSpout\Common\Entity\Row;
+use Illuminate\Database\Eloquent\Builder;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Filament\Exports\TableSimcardExcelExport; // Buat export sesuai kebutuhan
 
 
 
@@ -265,16 +266,15 @@ class TableSimcardResource extends Resource
                     ->multiple()
                     ->preload(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make()
-                    ->icon('heroicon-o-pencil')
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+            ->filtersFormColumns(2)
+            ->filtersTriggerAction(
+                fn (Tables\Actions\Action $action) => $action
+                    ->button()
+                    ->label('Filter')
+                    ->icon('heroicon-o-funnel')
                     ->color('primary')
-                    ->label('Edit'),
-                Tables\Actions\DeleteAction::make()
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
-                    ->requiresConfirmation(),
-            ])
+            )
             ->headerActions([
                 Tables\Actions\ImportAction::make()
                     ->importer(TableSimcardImportImporter::class)
@@ -315,6 +315,56 @@ class TableSimcardResource extends Resource
                             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         ])->deleteFileAfterSend(true);
                     }),
+                Tables\Actions\Action::make('exportExcel')
+                    ->label('Export to Excel')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $query = TableSimcard::query()->with('remote');
+
+                        // Terapkan filter aktif pada query export
+                        foreach ($livewire->tableFilters as $filter => $value) {
+                            if (!empty($value['values'])) {
+                                if ($filter === 'Status') {
+                                    $query->whereIn('Status', (array)$value['values']);
+                                } elseif ($filter === 'Provider') {
+                                    $query->whereIn('Provider', (array)$value['values']);
+                                }
+                            }
+                        }
+
+                        // Terapkan pencarian jika ada
+                        if ($livewire->tableSearch) {
+                            $search = $livewire->tableSearch;
+                            $query->where(function ($q) use ($search) {
+                                $q->where('Sim_Number', 'like', "%{$search}%")
+                                    ->orWhere('Provider', 'like', "%{$search}%")
+                                    ->orWhere('Site_ID', 'like', "%{$search}%")
+                                    ->orWhere('SN_Card', 'like', "%{$search}%")
+                                    ->orWhere('Informasi_Tambahan', 'like', "%{$search}%");
+                            });
+                        }
+
+                        // Sorting jika ada
+                        if ($livewire->tableSortColumn) {
+                            $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
+                        }
+
+                        return Excel::download(
+                            new TableSimcardExcelExport($query),
+                            'simcard_export_' . now()->format('Ymd_His') . '.xlsx'
+                        );
+                    }),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->icon('heroicon-o-pencil')
+                    ->color('primary')
+                    ->label('Edit'),
+                Tables\Actions\DeleteAction::make()
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -6,7 +6,6 @@ use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use App\Models\AlfaLawson\TableRemote;
 use App\Models\AlfaLawson\Ticket;
-use Carbon\Carbon;
 
 class StatsAlfaLawsonRemoteOverview extends BaseWidget
 {
@@ -16,15 +15,6 @@ class StatsAlfaLawsonRemoteOverview extends BaseWidget
     {
         // Query untuk menghitung total remote dengan status OPERATIONAL
         $totalRemote = TableRemote::where('Status', 'OPERATIONAL')->count();
-
-        // Query untuk menghitung total remote dengan status DISMANTLED
-        $totalRemoteDismantled = TableRemote::where('Status', 'DISMANTLED')->count();
-
-        // Query untuk menghitung total remote DISMANTLED yang diubah status pada bulan ini (Juni 2025)
-        $currentMonth = Carbon::now()->format('Y-m'); // 2025-06 berdasarkan tanggal saat ini
-        $totalDismantledThisMonth = TableRemote::where('Status', 'DISMANTLED')
-            ->whereRaw('DATE_FORMAT(updated_at, "%Y-%m") = ?', [$currentMonth])
-            ->count();
 
         // Query untuk menghitung total tiket untuk customer ALFAMART
         $totalTicketAlfa = Ticket::where('Customer', 'ALFAMART')->count();
@@ -37,14 +27,6 @@ class StatsAlfaLawsonRemoteOverview extends BaseWidget
                 ->description('Remote connections')
                 ->descriptionIcon('heroicon-o-globe-alt')
                 ->color('danger'),
-            // Stat::make('Total Remote Dismantled', $totalRemoteDismantled)
-            //     ->description('Dismantled connections')
-            //     ->descriptionIcon('heroicon-o-x-circle')
-            //     ->color('gray'),
-            Stat::make('Dismantled This Month', $totalDismantledThisMonth)
-                ->description('Dismantled in ' . Carbon::now()->format('F Y')) // Misalnya: "Dismantled in June 2025"
-                ->descriptionIcon('heroicon-o-calendar')
-                ->color('gray'),
             Stat::make('Total Ticket Alfa', $totalTicketAlfa)
                 ->description('Alfa tickets')
                 ->descriptionIcon('heroicon-o-exclamation-triangle')

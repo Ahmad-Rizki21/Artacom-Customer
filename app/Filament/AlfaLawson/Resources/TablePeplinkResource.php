@@ -14,6 +14,10 @@ use Filament\Forms\Components\Grid;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Columns\TextColumn;
 use App\Filament\Imports\TablePeplinkImportImporter;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Filament\Exports\TablePeplinkExcelExport;
+use Filament\Tables\Actions\Action;
+
 class TablePeplinkResource extends Resource
 {
     protected static ?string $model = TablePeplink::class;
@@ -49,16 +53,15 @@ class TablePeplinkResource extends Resource
                                                 ->dehydrated(true)
                                                 ->afterStateHydrated(function ($component, $state, $record) {
                                                     if ($record) {
-                                                        $component->state($record->SN); // Akan tampil dengan dash karena accessor
+                                                        $component->state($record->SN);
                                                     }
                                                 })
                                                 ->reactive()
                                                 ->afterStateUpdated(function ($state, $set, $get) {
-                                                    // Format SN dengan dash jika belum ada
                                                     if (strlen($state) === 12 && strpos($state, '-') === false) {
                                                         $state = substr($state, 0, 4) . '-' . substr($state, 4, 4) . '-' . substr($state, 8, 4);
                                                     }
-                                                    $set('SN', strtoupper($state)); // Simpan dengan dash
+                                                    $set('SN', strtoupper($state));
                                                 }),
                                             Forms\Components\TextInput::make('Model')
                                                 ->required()
@@ -70,7 +73,7 @@ class TablePeplinkResource extends Resource
                                                 ->required()
                                                 ->prefixIcon('heroicon-o-calendar')
                                                 ->helperText('Tanggal pembelian perangkat.')
-                                                ->default(now()), // Default ke tanggal dan waktu saat ini (10 Juni 2025, 13:58 WIB)
+                                                ->default(now()),
                                             Forms\Components\TextInput::make('garansi')
                                                 ->label('Warranty')
                                                 ->prefixIcon('heroicon-o-shield-check')
@@ -89,7 +92,7 @@ class TablePeplinkResource extends Resource
                                                 ->helperText('Pilih kepemilikan perangkat.'),
                                             Forms\Components\TextInput::make('Site_ID')
                                                 ->label('Site ID')
-                                                ->nullable() // Izinkan null
+                                                ->nullable()
                                                 ->prefixIcon('heroicon-m-building-storefront')
                                                 ->helperText('Masukkan ID lokasi toko terkait perangkat (kosongkan jika belum terpasang).')
                                                 ->maxLength(8),
@@ -239,14 +242,18 @@ class TablePeplinkResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('Status')
+                    ->label('Filter Status')
                     ->options([
                         'Operasional' => 'Operasional',
                         'Rusak' => 'Rusak',
                         'Sparepart' => 'Sparepart',
                         'Perbaikan' => 'Perbaikan',
+                        'Hilang' => 'Hilang',
                         'Tidak Bisa Diperbaiki' => 'Tidak Bisa Diperbaiki',
                     ])
-                    ->label('Filter Status'),
+                    ->multiple()
+                    ->searchable()
+                    ->placeholder('All'),
                 SelectFilter::make('Kepemilikan')
                     ->label('Filter Ownership')
                     ->options([
@@ -254,32 +261,113 @@ class TablePeplinkResource extends Resource
                         'JEDI' => 'JEDI',
                         'TRANSTEL' => 'TRANSTEL',
                         'ORIX' => 'ORIX',
-                    ]),
+                    ])
+                    ->multiple()
+                    ->searchable()
+                    ->placeholder('All'),
             ])
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+            ->filtersFormColumns(2)
+            ->filtersTriggerAction(
+                fn (Tables\Actions\Action $action) => $action
+                    ->button()
+                    ->label('Filters')
+                    ->icon('heroicon-o-funnel')
+                    ->color('primary')
+            )
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(), // Gunakan default delete action
+                Tables\Actions\DeleteAction::make(),
             ])
             ->headerActions([
                 Tables\Actions\ImportAction::make()
                     ->importer(TablePeplinkImportImporter::class)
                     ->label('Import Peplink Devices')
                     ->icon('heroicon-o-arrow-up-tray')
-                    ->color('info'),
+                    ->color('info')
+                    ->chunkSize(1000),
                 Tables\Actions\Action::make('downloadTemplate')
                     ->label('Download Template')
                     ->icon('heroicon-o-document-text')
                     ->color('warning')
                     ->action(function () {
-                        // Logika download template tetap sama
+                        $headers = [
+                            'SN',
+                            'Model',
+                            'Kepemilikan',
+                            'tgl_beli',
+                            'garansi',
+                            'Site_ID',
+                            'Status',
+                            'Deskripsi',
+                        ];
+
+                        $filePath = storage_path('app/public/Peplink_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
+                        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                        $sheet = $spreadsheet->getActiveSheet();
+                        $sheet->fromArray($headers, null, 'A1');
+
+                        $sampleRow = [
+                            '192D-3ED1-BD71',
+                            'PEPLINK BALANCE 20X',
+                            'JEDI',
+                            '2023-01-15',
+                            '12 Bulan',
+                            'TG50',
+                            'Operasional',
+                            'Perangkat utama toko TG50',
+                        ];
+                        $sheet->fromArray([$sampleRow], null, 'A2');
+
+                        $sheet->getStyle('A1:H1')->applyFromArray([
+                            'font' => ['bold' => true],
+                            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+                        ]);
+
+                        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+                        $writer->save($filePath);
+
+                        return response()->download($filePath, 'Peplink_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
+                            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        ])->deleteFileAfterSend(true);
                     }),
                 Tables\Actions\Action::make('export')
                     ->label('Export to Excel')
                     ->icon('heroicon-o-arrow-down-on-square')
                     ->color('success')
-                    ->action(function () {
-                        // Logika export tetap sama
-                    }),
+                    ->action(function ($livewire) {
+                        $query = TablePeplink::query();
+
+                        // Apply all active filters
+                        foreach ($livewire->tableFilters as $filter => $value) {
+                            if (!empty($value['values'])) {
+                                $query->whereIn($filter, (array)$value['values']);
+                            }
+                        }
+
+                        // Apply search query if present
+                        if ($livewire->tableSearch) {
+                            $query->where(function ($q) use ($livewire) {
+                                $q->where('SN', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Model', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Kepemilikan', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Site_ID', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Status', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Deskripsi', 'like', '%' . $livewire->tableSearch . '%');
+                            });
+                        }
+
+                        // Apply sorting if present
+                        if ($livewire->tableSortColumn) {
+                            $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
+                        }
+
+                        return Excel::download(
+                            new TablePeplinkExcelExport($query),
+                            'peplink_export_' . now()->format('Ymd_His') . '.xlsx'
+                        );
+                    })
+                    ->tooltip('Export filtered data to Excel'),
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),

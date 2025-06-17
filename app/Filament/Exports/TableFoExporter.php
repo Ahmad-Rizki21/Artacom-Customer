@@ -3,92 +3,117 @@
 namespace App\Filament\Exports;
 
 use App\Models\AlfaLawson\TableFo;
+use App\Models\AlfaLawson\TableRemote;
+use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\Exportable;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Illuminate\Database\Eloquent\Builder;
 use Filament\Actions\Exports\ExportColumn;
-use Filament\Actions\Exports\Exporter;
-use Filament\Actions\Exports\Models\Export;
-use OpenSpout\Common\Entity\Style\Style;
 
-class TableFoExporter extends Exporter
+class TableFoExporter implements FromQuery, WithHeadings, WithMapping, WithStyles
 {
-    protected static ?string $model = TableFo::class;
+    use Exportable;
 
-    public static function getColumns(): array
+    protected $filters;
+
+    public function __construct(array $filters = [])
+    {
+        $this->filters = $filters;
+    }
+
+    public function query()
+    {
+        $query = TableFo::query()
+            ->with('remote')
+            ->whereHas('remote', function (Builder $query) {
+                $query->where('Link', 'FO-GSM');
+            });
+
+        // Terapkan filter yang diterima
+        if (!empty($this->filters)) {
+            foreach ($this->filters as $filter => $value) {
+                if (!empty($value)) {
+                    switch ($filter) {
+                        case 'DC':
+                            $query->whereHas('remote', function (Builder $query) use ($value) {
+                                $query->whereIn('DC', (array) $value);
+                            });
+                            break;
+                        case 'remote.Customer':
+                            $query->whereHas('remote', function (Builder $query) use ($value) {
+                                $query->whereIn('Customer', (array) $value);
+                            });
+                            break;
+                        case 'Status':
+                            $query->whereIn('Status', (array) $value);
+                            break;
+                        case 'Provider':
+                            $query->whereIn('Provider', (array) $value);
+                            break;
+                    }
+                }
+            }
+        }
+
+        return $query;
+    }
+
+    public function headings(): array
     {
         return [
-            ExportColumn::make('CID')
-                ->label('Connection ID')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('Provider')
-                ->label('Provider Name')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('Register_Name')
-                ->label('Register Name')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('Site_ID')
-                ->label('Site ID')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.Nama_Toko')
-                ->label('Store Name')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.DC')
-                ->label('Distribution Center')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.IP_Address')
-                ->label('IP Address')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.Vlan')
-                ->label('VLAN')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.Link')
-                ->label('Connection Type')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('remote.Customer')
-                ->label('Customer')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('Status')
-                ->label('Connection Status')
-                ->formatStateUsing(fn ($state) => $state ?? '-'),
-
-            ExportColumn::make('created_at')
-                ->label('Created At')
-                ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y H:i:s') : '-'),
-
-            ExportColumn::make('updated_at')
-                ->label('Last Updated')
-                ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y H:i:s') : '-'),
+            'Connection ID',
+            'Provider',
+            'Register Name',
+            'Location',
+            'Site ID',
+            'Distribution Center',
+            'Status',
+            'Created At',
         ];
     }
 
-    public static function getCompletedNotificationBody(Export $export): string
+    public function map($row): array
     {
-        $body = 'Your fiber optic connections export has completed and ' . 
-                number_format($export->successful_rows) . ' ' . 
-                str('row')->plural($export->successful_rows) . ' exported.';
-
-        if ($failedRowsCount = $export->getFailedRowsCount()) {
-            $body .= ' ' . number_format($failedRowsCount) . ' ' . 
-                    str('row')->plural($failedRowsCount) . ' failed to export.';
-        }
-
-        return $body;
+        return [
+            $row->CID ?? '-',
+            $row->Provider ?? '-',
+            $row->Register_Name ?? '-',
+            $row->remote->Nama_Toko ?? '-',
+            $row->Site_ID ?? '-',
+            $row->remote->DC ?? '-',
+            $row->Status ?? '-',
+            $row->created_at ? \Carbon\Carbon::parse($row->created_at)->format('d/m/Y H:i:s') : '-',
+        ];
     }
 
-    // Add styling for the Excel file
-    public function getExcelStyle(): ?Style
+    public function styles(Worksheet $sheet)
     {
-        return (new Style())
-            ->setFontBold()
-            ->setFontSize(12)
-            ->setShouldWrapText(false);
+        return [
+            1 => ['font' => ['bold' => true, 'size' => 12]],
+        ];
+    }
+
+    // Kosongkan untuk menghindari formulir opsi
+    public static function getOptionsFormComponents(): array
+    {
+        return [];
+    }
+
+    // Placeholder untuk memenuhi ekspektasi Filament
+    public static function getColumns(): array
+    {
+        return [
+            ExportColumn::make('CID')->label('Connection ID'),
+            ExportColumn::make('Provider')->label('Provider'),
+            ExportColumn::make('Register_Name')->label('Register Name'),
+            ExportColumn::make('remote.Nama_Toko')->label('Location'),
+            ExportColumn::make('Site_ID')->label('Site ID'),
+            ExportColumn::make('remote.DC')->label('Distribution Center'),
+            ExportColumn::make('Status')->label('Status'),
+            ExportColumn::make('created_at')->label('Created At'),
+        ];
     }
 }

@@ -16,8 +16,10 @@ use Filament\Forms\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Actions\ImportAction;
 use App\Filament\Imports\TableRemoteImportImporter;
-use Filament\Tables\Actions\ExportAction;
-use App\Filament\Exports\TableRemoteExporter;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Filament\Exports\TableRemoteExcelExport;
+use Filament\Tables\Actions\Action;
+use Illuminate\Database\Eloquent\Builder;
 
 class TableRemoteResource extends Resource
 {
@@ -33,7 +35,7 @@ class TableRemoteResource extends Resource
             ->schema([
                 Tabs::make('Tabs')
                     ->tabs([
-                        Tabs::make('Details')
+                        Tabs\Tab::make('Details')
                             ->schema([
                                 Section::make('Site Information')
                                     ->description('Provide general information about the site.')
@@ -126,7 +128,7 @@ class TableRemoteResource extends Resource
                                             ->columnSpanFull(),
                                     ]),
                             ]),
-                        Tabs::make('History')
+                        Tabs\Tab::make('History')
                             ->schema([
                                 Placeholder::make('HistoryList')
                                     ->content(function ($record) {
@@ -313,19 +315,51 @@ class TableRemoteResource extends Resource
                 Tables\Actions\EditAction::make(),
             ])
             ->headerActions([
-                ExportAction::make()
-                    ->exporter(TableRemoteExporter::class)
-                    ->label('Export to Excel')
-                    ->icon('heroicon-o-arrow-down-on-square')
+                Action::make('exportExcel')
+                    ->label('Export Excel')
+                    ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
-                    ->fileName(fn () => 'TableRemote_Export_' . now()->format('Ymd_His') . '.xlsx')
-                    ->chunkSize(1000),
+                    ->action(function ($livewire) {
+                        $query = TableRemote::query();
+                        
+                        // Apply all active filters
+                        foreach ($livewire->tableFilters as $filter => $value) {
+                            if (!empty($value['values'])) {
+                                $query->whereIn($filter, (array)$value['values']);
+                            }
+                        }
+
+                        // Apply search query if present
+                        if ($livewire->tableSearch) {
+                            $query->where(function ($q) use ($livewire) {
+                                $q->where('Site_ID', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Nama_Toko', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('IP_Address', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Controller', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Customer', 'like', '%' . $livewire->tableSearch . '%')
+                                  ->orWhere('Keterangan', 'like', '%' . $livewire->tableSearch . '%');
+                            });
+                        }
+
+                        // Apply sorting if present
+                        if ($livewire->tableSortColumn) {
+                            $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
+                        }
+
+                        return Excel::download(
+                            new TableRemoteExcelExport($query),
+                            'remote_export_'.now()->format('Ymd_His').'.xlsx'
+                        );
+                    })
+                    ->tooltip('Export filtered data to Excel'),
+
                 ImportAction::make()
                     ->importer(TableRemoteImportImporter::class)
                     ->label('Import from Excel')
                     ->icon('heroicon-o-arrow-up-on-square-stack')
                     ->color('info')
                     ->chunkSize(1000),
+                
                 Tables\Actions\Action::make('downloadTemplate')
                     ->label('Download Template')
                     ->icon('heroicon-o-document-text')

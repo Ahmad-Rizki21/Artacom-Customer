@@ -13,6 +13,13 @@ class TableSimcardImportImporter extends Importer
 {
     protected static ?string $model = TableSimcard::class;
 
+    // Daftar status yang valid di sistem Anda (tambahkan sesuai kebutuhan)
+    protected static array $validStatuses = [
+        'active',
+        'inactive',
+        'gudang',  // Tambahkan status Gudang di sini (huruf kecil)
+    ];
+
     // Mendefinisikan kolom-kolom yang diharapkan dari file CSV
     public static function getColumns(): array
     {
@@ -20,16 +27,22 @@ class TableSimcardImportImporter extends Importer
             ImportColumn::make('Sim_Number')
                 ->label('Nomor SIM')
                 ->rules(['required', 'string', 'max:16', 'unique:table_simcard,Sim_Number']),
-            ImportColumn::make('Provider') // Perbaikan: Ganti "Seller" menjadi "make"
+            ImportColumn::make('Provider')
                 ->label('Provider')
                 ->rules(['required', 'string', 'in:Telkomsel,Indosat,XL,Axis,Tri']),
             ImportColumn::make('Site_ID')
                 ->label('Lokasi Toko')
-                ->rules(['required', 'string', 'max:255', function (string $attribute, $value, \Closure $fail) {
-                    if (!TableRemote::where('Site_ID', $value)->exists()) {
-                        $fail("Site_ID '$value' tidak ditemukan di tabel Remote.");
+                ->rules([
+                    'nullable',
+                    'string',
+                    'max:255',
+                    function (string $attribute, $value, \Closure $fail) {
+                        // Abaikan validasi jika value kosong atau tanda '-'
+                        if ($value !== null && $value !== '' && $value !== '-' && !TableRemote::where('Site_ID', $value)->exists()) {
+                            $fail("Site_ID '$value' tidak ditemukan di tabel Remote.");
+                        }
                     }
-                }]),
+                ]),
             ImportColumn::make('Informasi_Tambahan')
                 ->label('Catatan')
                 ->rules(['nullable', 'string']),
@@ -38,7 +51,7 @@ class TableSimcardImportImporter extends Importer
                 ->rules(['nullable', 'string', 'max:25']),
             ImportColumn::make('Status')
                 ->label('Status')
-                ->rules(['required', 'string', 'in:active,inactive']),
+                ->rules(['required', 'string']), // Hilangkan rule 'in' supaya bisa terima status lain
         ];
     }
 
@@ -58,25 +71,28 @@ class TableSimcardImportImporter extends Importer
 
             $record = new TableSimcard();
 
-            // Validasi dan normalisasi Status
-            $status = trim($this->data['Status']);
-            if (!in_array($status, ['active', 'inactive'])) {
-                $status = 'active'; // Default ke active jika status tidak valid
-                Log::warning('Invalid Status value, defaulting to active: ' . $this->data['Status']);
+            // Normalisasi Status: lowercase dan cek validitas, default ke 'active'
+            $statusRaw = trim($this->data['Status'] ?? '');
+            $status = strtolower($statusRaw);
+            if (!in_array($status, self::$validStatuses)) {
+                Log::warning("Invalid Status value '{$statusRaw}', defaulting to active.");
+                $status = 'active';
             }
 
-            // Validasi dan normalisasi Provider
-            $provider = trim($this->data['Provider']);
-            if (!in_array($provider, ['Telkomsel', 'Indosat', 'XL', 'Axis', 'Tri'])) {
-                $provider = 'Telkomsel'; // Default ke Telkomsel jika provider tidak valid
-                Log::warning('Invalid Provider value, defaulting to Telkomsel: ' . $this->data['Provider']);
-            }
+            // Normalisasi Provider (jika perlu)
+            $providerRaw = trim($this->data['Provider'] ?? '');
+            $validProviders = ['Telkomsel', 'Indosat', 'XL', 'Axis', 'Tri'];
+            $provider = in_array($providerRaw, $validProviders) ? $providerRaw : 'Telkomsel';
+
+            // Normalisasi Site_ID: ubah '-' atau kosong jadi null
+            $siteIdRaw = trim($this->data['Site_ID'] ?? '');
+            $siteId = ($siteIdRaw === '' || $siteIdRaw === '-') ? null : $siteIdRaw;
 
             // Isi data ke record
             $record->fill([
                 'Sim_Number' => $simNumber,
                 'Provider' => $provider,
-                'Site_ID' => trim($this->data['Site_ID']),
+                'Site_ID' => $siteId,
                 'Informasi_Tambahan' => $this->data['Informasi_Tambahan'] ?? null,
                 'SN_Card' => $this->data['SN_Card'] ?? 'Tidak ada SN',
                 'Status' => $status,

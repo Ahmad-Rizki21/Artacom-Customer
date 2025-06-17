@@ -20,6 +20,8 @@ use App\Filament\Imports\TableSimcardImportImporter;
 use OpenSpout\Writer\XLSX\Writer as XLSXWriter;
 use OpenSpout\Common\Entity\Row;
 
+
+
 class TableSimcardResource extends Resource
 {
     protected static ?string $model = TableSimcard::class;
@@ -31,6 +33,12 @@ class TableSimcardResource extends Resource
     protected static ?string $pluralLabel = 'SIM Cards';
     protected static ?string $recordTitleAttribute = 'Sim_Number';
     protected static ?int $navigationSort = 2;
+
+    public static function getEloquentQuery($query = null): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery($query)->with('remote');
+    }
+
 
     public static function form(Form $form): Form
     {
@@ -86,8 +94,7 @@ class TableSimcardResource extends Resource
                                             Forms\Components\TextInput::make('Site_ID')
                                                 ->label('Lokasi Toko')
                                                 ->required()
-                                                ->placeholder('Masukkan kode toko atau lokasi')
-                                                ->prefixIcon('heroicon-m-building-storefront')
+                                                ->placeholder('Masukkan kode toko atau lokasi (boleh kosong)')                                                ->prefixIcon('heroicon-m-building-storefront')
                                                 ->helperText('Gunakan kode toko atau deskripsi lokasi kartu.')
                                                 ->extraInputAttributes(['class' => 'border-2 border-indigo-200 focus:border-indigo-500 transition-colors'])
                                                 ->columnSpan(2),
@@ -104,6 +111,7 @@ class TableSimcardResource extends Resource
                                                 ->label('Status')
                                                 ->options([
                                                     'active' => 'Aktif',
+                                                    'gudang' => 'Gudang',
                                                     'inactive' => 'Tidak Aktif',
                                                 ])
                                                 ->default('active')
@@ -153,6 +161,9 @@ class TableSimcardResource extends Resource
             ->columns(12);
     }
 
+
+
+    
     public static function table(Table $table): Table
     {
         return $table
@@ -211,11 +222,13 @@ class TableSimcardResource extends Resource
                     ->badge()
                     ->icon(fn (string $state): string => match ($state) {
                         'active' => 'heroicon-o-check-circle',
+                        'gudang' => 'heroicon-o-check-badge',
                         'inactive' => 'heroicon-o-x-circle',
                         default => 'heroicon-o-question-mark-circle',
                     })
                     ->color(fn (string $state): string => match ($state) {
                         'active' => 'success',
+                        'gudang' => 'warning',
                         'inactive' => 'danger',
                         default => 'gray',
                     })
@@ -235,6 +248,7 @@ class TableSimcardResource extends Resource
                     ->label('Filter Status')
                     ->options([
                         'active' => 'Aktif',
+                        'gudang' => 'Gudang',
                         'inactive' => 'Tidak Aktif',
                     ])
                     ->multiple()

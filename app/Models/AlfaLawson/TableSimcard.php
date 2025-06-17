@@ -106,7 +106,7 @@ class TableSimcard extends Model
 
     public function remote()
     {
-        return $this->belongsTo(TableRemote::class, 'Site_ID', 'Site_ID');
+        return $this->belongsTo(TableRemote::class, 'Site_ID', 'Site_ID')->withDefault();
     }
 
     public function histories()

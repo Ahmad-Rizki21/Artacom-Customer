@@ -1,0 +1,38 @@
+version: "3.8"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: laravel-filament-app
+    container_name: laravel-filament-app
+    restart: unless-stopped
+    ports:
+      - "80:80"  # Map port 80 on host to port 80 in container
+    volumes:
+      - .:/var/www/html  # Change volume mount path
+    networks:
+      - laravel
+    
+
+  db:
+    image: mysql:8.0
+    container_name: db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: artacom
+    volumes:
+      - dbdata:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - laravel
+
+networks:
+  laravel:
+    driver: bridge
+
+volumes:
+  dbdata:
+    driver: local

@@ -6,10 +6,31 @@ use App\Filament\AlfaLawson\Resources\TableRemoteResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Notifications\Notification;
+use App\Models\AlfaLawson\TableRemote;
+use Illuminate\Contracts\View\View;
 
 class ListTableRemotes extends ListRecords
 {
     protected static string $resource = TableRemoteResource::class;
+
+    public function getFooter(): ?View
+    {
+        $table = $this->getTable();
+        $records = $table->getRecords();
+        $firstItem = $records->firstItem() ?? 0;
+        $lastItem = $records->lastItem() ?? 0;
+
+        $totalRecords = TableRemote::count();
+        $dismantledCount = TableRemote::where('Status', 'DISMANTLED')->count();
+        $operationalCount = $totalRecords - $dismantledCount;
+
+        return view('filament.tables.custom-footer', [
+            'firstItem' => $firstItem,
+            'lastItem' => $lastItem,
+            'operationalCount' => $operationalCount,
+            'dismantledCount' => $dismantledCount,
+        ]);
+    }
 
     protected function getHeaderActions(): array
     {
@@ -32,21 +53,16 @@ class ListTableRemotes extends ListRecords
         ];
     }
 
-
     protected function getHeaderWidgets(): array
     {
-        return [
-            // Jika Anda memiliki widget, tambahkan di sini
-        ];
+        return [];
     }
-
 
     public function getSubheading(): ?string
     {
         return 'Manage and monitor all remote connections and their configurations.';
     }
 
-    // Customizing empty state
     protected function getDefaultTableEmptyStateIcon(): ?string
     {
         return 'heroicon-o-computer-desktop';
@@ -72,15 +88,6 @@ class ListTableRemotes extends ListRecords
         ];
     }
 
-    // Optional: Add a footer message
-    protected function getFooterWidgets(): array
-    {
-        return [
-            // Jika Anda memiliki widget footer, tambahkan di sini
-        ];
-    }
-
-    // Optional: Add page metadata
     protected function getMetadata(): array
     {
         return [
@@ -90,13 +97,12 @@ class ListTableRemotes extends ListRecords
         ];
     }
 
-    // Optional: Customize the table's view
     protected function configureTableView(): void
     {
         $this->table
             ->striped()
             ->paginated([10, 25, 50, 100])
-            ->poll('60s') // Auto-refresh every 60 seconds
+            ->poll('60s')
             ->defaultSort('created_at', 'desc');
     }
 }

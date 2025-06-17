@@ -1,0 +1,8 @@
+node_modules
+vendor
+.git
+.idea
+.vscode
+*.log
+docker-compose.yml
+.env

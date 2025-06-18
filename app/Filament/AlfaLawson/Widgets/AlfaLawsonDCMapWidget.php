@@ -4,6 +4,8 @@ namespace App\Filament\AlfaLawson\Widgets;
 
 use Filament\Widgets\Widget;
 use Illuminate\Contracts\View\View;
+use App\Models\AlfaLawson\TableRemote;
+use Illuminate\Support\Collection;
 
 class AlfaLawsonDCMapWidget extends Widget
 {
@@ -17,75 +19,45 @@ class AlfaLawsonDCMapWidget extends Widget
     public string $searchTerm = '';
     
     public function filterByType(string $type): void
-{
-    $this->selectedFilter = $type;
-    $this->dispatch('refreshMap');
-}
-
-public function updatedSearchTerm(): void
-{
-    $this->dispatch('refreshMap');
-}
-    
-    public function getDcLocations(): array
     {
-        $locations = $this->getAllDcLocations();
-        
-        if ($this->selectedFilter !== 'Semua') {
-            $locations = array_filter($locations, fn($loc) => $loc['type'] === $this->selectedFilter);
-        }
-        
-        if (!empty($this->searchTerm)) {
-            $searchTerm = strtolower($this->searchTerm);
-            $locations = array_filter($locations, function($loc) use ($searchTerm) {
-                return str_contains(strtolower($loc['name']), $searchTerm) || 
-                       str_contains(strtolower($loc['type']), $searchTerm) ||
-                       str_contains((string)$loc['remote'], $searchTerm);
-            });
-        }
-        
-        return array_values($locations);
+        $this->selectedFilter = $type;
+        $this->dispatch('refreshMap');
+    }
+
+    public function updatedSearchTerm(): void
+    {
+        $this->dispatch('refreshMap');
     }
     
-    private function getAllDcLocations(): array
+    /**
+     * Ambil data lokasi DC unik dari database dengan jumlah remote, tipe customer, lat, lng
+     * @return array
+     */
+    public function getDcLocations(): array
     {
-        return [
-            [
-                'name' => 'DC Jakarta',
-                'type' => 'Alfamart',
-                'remote' => 120,
-                'lat' => -6.2088,
-                'lng' => 106.8456,
-            ],
-            [
-                'name' => 'DC Surabaya',
-                'type' => 'Alfamart',
-                'remote' => 85,
-                'lat' => -7.2575,
-                'lng' => 112.7521,
-            ],
-            [
-                'name' => 'DC Bandung',
-                'type' => 'Lawson',
-                'remote' => 65,
-                'lat' => -6.9175,
-                'lng' => 107.6191,
-            ],
-            [
-                'name' => 'DC Medan',
-                'type' => 'Alfamart',
-                'remote' => 50, 
-                'lat' => 3.5952,
-                'lng' => 98.6722,
-            ],
-            [
-                'name' => 'DC Makassar',
-                'type' => 'Lawson',
-                'remote' => 45,
-                'lat' => -5.1477,
-                'lng' => 119.4327,
-            ],
-        ];
+        // Ambil data dari DB, group by DC, customer, lat, lng
+        $query = TableRemote::query()
+            ->selectRaw('DC as name, Customer as type, latitude as lat, longitude as lng, COUNT(*) as remote')
+            ->groupBy('DC', 'Customer', 'latitude', 'longitude');
+
+        // Filter berdasarkan tipe customer jika dipilih selain 'Semua'
+        if ($this->selectedFilter !== 'Semua') {
+            $query->where('Customer', $this->selectedFilter);
+        }
+
+        $locations = $query->get();
+
+        // Filter search term jika ada
+        if (!empty($this->searchTerm)) {
+            $searchTerm = strtolower($this->searchTerm);
+            $locations = $locations->filter(function ($loc) use ($searchTerm) {
+                return str_contains(strtolower($loc->name), $searchTerm) ||
+                       str_contains(strtolower($loc->type), $searchTerm) ||
+                       str_contains((string)$loc->remote, $searchTerm);
+            });
+        }
+
+        return $locations->values()->toArray();
     }
     
     public function render(): View

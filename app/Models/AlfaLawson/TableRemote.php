@@ -18,6 +18,8 @@ class TableRemote extends Model
         'Site_ID',
         'Nama_Toko',
         'DC',
+        'latitude',
+        'longitude',
         'IP_Address',
         'Vlan',
         'Controller',

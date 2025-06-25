@@ -2,8 +2,8 @@
 
 namespace App\Filament\AlfaLawson\Resources;
 
-use App\Filament\AlfaLawson\Resources\TableRemoteResource\Pages;
-use App\Models\AlfaLawson\TableRemote;
+use App\Filament\AlfaLawson\Resources\RemoteAtmbsiResource\Pages;
+use App\Models\AlfaLawson\RemoteAtmbsi;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -15,30 +15,30 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Actions\ImportAction;
-use App\Filament\Imports\TableRemoteImportImporter;
+use App\Filament\Imports\RemoteAtmbsiImportImporter;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Filament\Exports\TableRemoteExcelExport;
+use App\Filament\Exports\RemoteAtmbsiExcelExport;
 use Filament\Tables\Actions\Action;
 use Illuminate\Database\Eloquent\Builder;
 
-class TableRemoteResource extends Resource
+class RemoteAtmbsiResource extends Resource
 {
-    protected static ?string $model = TableRemote::class;
+    protected static ?string $recordTitleAttribute = 'Site_ID'; // Kolom yang digunakan sebagai judul record
+    protected static ?string $model = RemoteAtmbsi::class;
     protected static ?string $navigationIcon = 'heroicon-o-server';
-    protected static ?string $navigationLabel = 'Remote Alfa Lawson';
+    protected static ?string $navigationLabel = 'Remote BSI'; // Label disesuaikan menjadi "Remote BSI"
     protected static ?string $navigationGroup = 'Network Management';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
 
     public static function getModelLabel(): string
     {
-        return 'Remote Alfamart Lawson'; // Label singular
+        return 'Remote Atm Bsi'; // Label singular
     }
 
     public static function getPluralModelLabel(): string
     {
-        return 'Remote Alfamart Lawson'; // Label plural, tanpa "s"
+        return 'Remote Atm Bsi'; // Label plural, tanpa "s"
     }
-
 
     public static function form(Form $form): Form
     {
@@ -60,18 +60,15 @@ class TableRemoteResource extends Resource
                                             ->placeholder('Enter unique Site ID')
                                             ->helperText('This ID must be unique for each site.'),
 
-                                        Forms\Components\TextInput::make('Nama_Toko')
-                                            ->label('Nama Toko')
+                                        Forms\Components\TextInput::make('Site_Name')
+                                            ->label('Site Name')
                                             ->required()
-                                            ->placeholder('Enter store name'),
+                                            ->placeholder('Enter site name'),
 
-                                        Forms\Components\TextInput::make('DC')
-                                            ->label('Distribution Center')
-                                            ->placeholder('Enter DC (e.g., Marunda, Cikarang)'),
-
-                                        Forms\Components\DatePicker::make('Online_Date')
-                                            ->label('Online Date')
-                                            ->placeholder('Select the date the site went online'),
+                                        Forms\Components\TextInput::make('Branch')
+                                            ->label('Branch')
+                                            ->required()
+                                            ->placeholder('Enter branch name'),
                                     ]),
 
                                 Section::make('Network Configuration')
@@ -95,6 +92,7 @@ class TableRemoteResource extends Resource
 
                                         Forms\Components\TextInput::make('Controller')
                                             ->label('Controller')
+                                            ->required()
                                             ->placeholder('Enter Controller (e.g., Cisco, Aruba)'),
 
                                         Forms\Components\Select::make('Link')
@@ -116,8 +114,6 @@ class TableRemoteResource extends Resource
                                             ->label('Customer')
                                             ->required()
                                             ->options([
-                                                'ALFAMART' => 'ALFAMART',
-                                                'LAWSON' => 'LAWSON',
                                                 'BSI' => 'BSI',
                                             ])
                                             ->searchable()
@@ -132,6 +128,11 @@ class TableRemoteResource extends Resource
                                             ])
                                             ->helperText('Select the status of the site.'),
 
+                                        Forms\Components\DatePicker::make('Online_Date')
+                                            ->label('Online Date')
+                                            ->required()
+                                            ->placeholder('Select the date the site went online'),
+
                                         Forms\Components\Textarea::make('Keterangan')
                                             ->label('Remarks')
                                             ->placeholder('Enter additional notes or remarks about the site.')
@@ -143,10 +144,10 @@ class TableRemoteResource extends Resource
                                 Placeholder::make('HistoryList')
                                     ->content(function ($record) {
                                         if (!$record) {
-                                            return view('filament.pages.remote-history', ['histories' => []]);
+                                            return view('filament.pages.remote-history-atmbsi', ['histories' => []]);
                                         }
                                         $record->load('histories');
-                                        return view('filament.pages.remote-history', ['histories' => $record->histories ?? []]);
+                                        return view('filament.pages.remote-history-atmbsi', ['histories' => $record->histories ?? []]);
                                     })
                                     ->columnSpan('full'),
                             ]),
@@ -158,8 +159,8 @@ class TableRemoteResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->query(TableRemote::query())
-            ->description('Daftar semua Remote.')
+            ->query(RemoteAtmbsi::query())
+            ->description('Daftar semua Remote BSI.') // Deskripsi disesuaikan
             ->columns([
                 TextColumn::make('Site_ID')
                     ->label('Site ID')
@@ -170,14 +171,14 @@ class TableRemoteResource extends Resource
                     ->weight('bold')
                     ->toggleable(),
 
-                TextColumn::make('Nama_Toko')
-                    ->label('Nama Toko')
+                TextColumn::make('Site_Name')
+                    ->label('Site Name')
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
 
-                TextColumn::make('DC')
-                    ->label('Distribution Center')
+                TextColumn::make('Branch')
+                    ->label('Branch')
                     ->badge()
                     ->toggleable(),
 
@@ -245,37 +246,24 @@ class TableRemoteResource extends Resource
             ])
             ->defaultSort('Site_ID', 'asc')
             ->filters([
-                Tables\Filters\SelectFilter::make('DC')
-                    ->label('Distribution Center')
+                Tables\Filters\SelectFilter::make('Branch')
+                    ->label('Branch')
                     ->options(function () {
-                        return TableRemote::distinct()
-                            ->pluck('DC', 'DC')
+                        return RemoteAtmbsi::distinct()
+                            ->pluck('Branch', 'Branch')
                             ->filter()
                             ->sort()
-                            ->mapWithKeys(fn ($dc) => [$dc => ucfirst(strtolower($dc))])
+                            ->mapWithKeys(fn ($branch) => [$branch => ucfirst(strtolower($branch))])
                             ->toArray();
                     })
                     ->multiple()
                     ->searchable()
-                    ->placeholder('Select Distribution Center'),
-
-                Tables\Filters\SelectFilter::make('Customer')
-                    ->label('Customer')
-                    ->options(function () {
-                        return TableRemote::distinct()
-                            ->pluck('Customer', 'Customer')
-                            ->filter()
-                            ->mapWithKeys(fn ($customer) => [$customer => ucfirst(strtolower($customer))])
-                            ->toArray();
-                    })
-                    ->multiple()
-                    ->searchable()
-                    ->placeholder('Select Customer'),
+                    ->placeholder('Select Branch'),
 
                 Tables\Filters\SelectFilter::make('Controller')
                     ->label('Controller')
                     ->options(function () {
-                        return TableRemote::distinct()
+                        return RemoteAtmbsi::distinct()
                             ->pluck('Controller', 'Controller')
                             ->filter()
                             ->mapWithKeys(fn ($controller) => [$controller => ucfirst(strtolower($controller))])
@@ -310,7 +298,7 @@ class TableRemoteResource extends Resource
                     ->placeholder('Select Connection Type'),
             ])
             ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
-            ->filtersFormColumns(5)
+            ->filtersFormColumns(4)
             ->filtersTriggerAction(
                 fn (Tables\Actions\Action $action) => $action
                     ->button()
@@ -322,52 +310,53 @@ class TableRemoteResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ])
-            ->headerActions([
+           ->headerActions([
                 Action::make('exportExcel')
                     ->label('Export Excel')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
                     ->action(function ($livewire) {
-                        $query = TableRemote::query();
-                        
-                        // Apply all active filters
+                        $query = RemoteAtmbsi::query();
+
+                        // Terapkan filter dari tabel
                         foreach ($livewire->tableFilters as $filter => $value) {
                             if (!empty($value['values'])) {
                                 $query->whereIn($filter, (array)$value['values']);
                             }
                         }
 
-                        // Apply search query if present
+                        // Terapkan pencarian teks
                         if ($livewire->tableSearch) {
                             $query->where(function ($q) use ($livewire) {
                                 $q->where('Site_ID', 'like', '%' . $livewire->tableSearch . '%')
-                                  ->orWhere('Nama_Toko', 'like', '%' . $livewire->tableSearch . '%')
-                                  ->orWhere('IP_Address', 'like', '%' . $livewire->tableSearch . '%')
-                                  ->orWhere('Controller', 'like', '%' . $livewire->tableSearch . '%')
-                                  ->orWhere('Customer', 'like', '%' . $livewire->tableSearch . '%')
-                                  ->orWhere('Keterangan', 'like', '%' . $livewire->tableSearch . '%');
+                                ->orWhere('Site_Name', 'like', '%' . $livewire->tableSearch . '%')
+                                ->orWhere('IP_Address', 'like', '%' . $livewire->tableSearch . '%')
+                                ->orWhere('Controller', 'like', '%' . $livewire->tableSearch . '%')
+                                ->orWhere('Keterangan', 'like', '%' . $livewire->tableSearch . '%');
                             });
                         }
 
-                        // Apply sorting if present
+                        // Terapkan sorting
                         if ($livewire->tableSortColumn) {
                             $query->orderBy($livewire->tableSortColumn, $livewire->tableSortDirection);
                         }
 
-                        return Excel::download(
-                            new TableRemoteExcelExport($query),
-                            'remote_export_'.now()->format('Ymd_His').'.xlsx'
+                        return \Maatwebsite\Excel\Facades\Excel::download(
+                            new \App\Filament\Exports\RemoteAtmbsiExcelExport($query),
+                            'remote_bsi_export_' . now()->format('Ymd_His') . '.xlsx'
                         );
                     })
                     ->tooltip('Export filtered data to Excel'),
 
                 ImportAction::make()
-                    ->importer(TableRemoteImportImporter::class)
+                    ->importer(RemoteAtmbsiImportImporter::class)
                     ->label('Import from Excel')
                     ->icon('heroicon-o-arrow-up-on-square-stack')
                     ->color('info')
                     ->chunkSize(1000),
-                
+
+
+
                 Tables\Actions\Action::make('downloadTemplate')
                     ->label('Download Template')
                     ->icon('heroicon-o-document-text')
@@ -375,8 +364,8 @@ class TableRemoteResource extends Resource
                     ->action(function () {
                         $headers = [
                             'Site_ID',
-                            'Nama_Toko',
-                            'DC',
+                            'Site_Name',
+                            'Branch',
                             'IP_Address',
                             'Vlan',
                             'Controller',
@@ -387,19 +376,19 @@ class TableRemoteResource extends Resource
                             'Keterangan',
                         ];
 
-                        $filePath = storage_path('app/public/TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
+                        $filePath = storage_path('app/public/RemoteBSI_Import_Template_' . now()->format('Ymd_His') . '.xlsx');
                         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                         $sheet = $spreadsheet->getActiveSheet();
                         $sheet->fromArray($headers, null, 'A1');
 
                         $sampleRow = [
                             'CD27',
-                            'INDUSTRI CIKARANG 6',
-                            'BEKASI',
+                            'ATM BSI CIKARANG',
+                            'CIKARANG',
                             '7.48.1.246',
                             '162',
                             'PRO-SDX-02',
-                            'ALFAMART',
+                            'BSI',
                             '2022-05-09',
                             'FO-GSM',
                             'OPERATIONAL',
@@ -407,7 +396,6 @@ class TableRemoteResource extends Resource
                         ];
                         $sheet->fromArray([$sampleRow], null, 'A2');
 
-                        // Apply basic styles
                         $sheet->getStyle('A1:K1')->applyFromArray([
                             'font' => ['bold' => true],
                             'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
@@ -416,11 +404,12 @@ class TableRemoteResource extends Resource
                         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                         $writer->save($filePath);
 
-                        return response()->download($filePath, 'TableRemote_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
+                        return response()->download($filePath, 'RemoteBSI_Import_Template_' . now()->format('Ymd_His') . '.xlsx', [
                             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         ])->deleteFileAfterSend(true);
                     }),
             ])
+
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),
             ])
@@ -430,10 +419,11 @@ class TableRemoteResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTableRemotes::route('/'),
-            'create' => Pages\CreateTableRemote::route('/create'),
-            'view' => Pages\ViewTableRemote::route('/{record}'),
-            'edit' => Pages\EditTableRemote::route('/{record}/edit'),
+            'index' => Pages\ListRemoteAtmbsis::route('/'),
+            'create' => Pages\CreateRemoteAtmbsi::route('/create'),
+            'edit' => Pages\EditRemoteAtmbsi::route('/{record}/edit'),
         ];
     }
+
+    
 }

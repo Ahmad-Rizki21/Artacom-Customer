@@ -136,14 +136,16 @@ class TableSimcardResource extends Resource
                                 ]),
                         ]),
                     Tabs\Tab::make('History')
-                        ->schema([
-                            Forms\Components\Placeholder::make('HistoryList')
-                                ->content(function ($record) {
-                                    $record->load('histories');
-                                    return view('filament.pages.simcard-history', ['histories' => $record->histories ?? []]);
-                                })
-                                ->columnSpan('full'),
-                        ]),
+    ->schema([
+        Forms\Components\Placeholder::make('HistoryList')
+            ->content(function ($record) {
+                // Kode ini sekarang aman karena hanya akan berjalan di halaman edit
+                $record->load('histories');
+                return view('filament.pages.simcard-history', ['histories' => $record->histories ?? []]);
+            })
+            ->columnSpan('full'),
+    ])
+    ->visibleOn('edit'), // <-- TAMBAHKAN BARIS INI
                 ])
                 ->columnSpanFull(),
         ];
@@ -280,7 +282,9 @@ class TableSimcardResource extends Resource
                     ->importer(TableSimcardImportImporter::class)
                     ->label('Import SIM Cards')
                     ->icon('heroicon-o-arrow-up-tray')
-                    ->color('info'),
+                    ->color('info')
+                    ->chunkSize(1000),
+                    
                 Tables\Actions\Action::make('downloadTemplate')
                     ->label('Download Template')
                     ->icon('heroicon-o-document-text')

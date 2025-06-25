@@ -19,18 +19,10 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Navigation\NavigationItem;
 use Filament\Navigation\NavigationGroup;
+use App\Filament\AlfaLawson\Resources\RemoteAtmbsiResource; // Tambahkan ini
 use App\Filament\AlfaLawson\Widgets\AlfaLawsonDCMapWidget;
 use App\Filament\AlfaLawson\Widgets\MonthlyTicketChart;
 use App\Filament\AlfaLawson\Widgets\StatsAlfaLawsonRemoteOverview;
-use Filament\Facades\Filament;
-
-use CharrafiMed\GlobalSearchModal\GlobalSearchModalPlugin;
-use App\Filament\AlfaLawson\Widgets\DCMapWidget;
-use Swis\Filament\Backgrounds\FilamentBackgroundsPlugin;
-use Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin;
-use Rmsramos\Activitylog\ActivitylogPlugin;
-use Joaopaulolndev\FilamentEditProfile\FilamentEditProfilePlugin;
-use Devonab\FilamentEasyFooter\EasyFooterPlugin;
 
 class AlfaPanelProvider extends PanelProvider
 {
@@ -52,10 +44,6 @@ class AlfaPanelProvider extends PanelProvider
             ])
             ->sidebarFullyCollapsibleOnDesktop()
             ->sidebarWidth('17rem')
-            
-
-            // ->brandLogo(fn () => view('components.brand-alfa-logo'))
-
             ->brandLogo(asset('images/Logo Light.png'))
             ->darkModeBrandLogo(asset('images/Logo Dark.png'))
             ->brandLogoHeight(fn () => \Illuminate\Support\Facades\Auth::check() ? '3.5rem' : '7rem')
@@ -64,36 +52,22 @@ class AlfaPanelProvider extends PanelProvider
                 fn () => '<style>.filament-login-page .filament-brand { margin-bottom: 1rem; } .filament-login-page .filament-form { margin-top: 0.5rem; }</style>'
             )
             ->favicon(asset('images/favicon-opened-svgrepo-com.svg'))
-            
-
-            // ->renderHook(
-            //     'panels::auth.login.before-heading',
-            //     fn
-            //      () => view('components.login-branding')
-            // )
-
             ->resources([
-            config('filament-logger.activity_resource')
+                RemoteAtmbsiResource::class, // Daftarkan secara manual
+                config('filament-logger.activity_resource'),
             ])
-
-            
-           
-           
             ->navigationGroups([
                 'Panel Switcher',
                 'Support',
-                'Network Management'
+                'Network Management',
             ])
             ->navigationItems([
-                // Dashboard
                 NavigationItem::make()
                     ->label('Dashboard')
                     ->icon('heroicon-o-home')
                     ->url('/alfa')
                     ->isActiveWhen(fn() => request()->is('alfa'))
                     ->sort(-2),
-    
-                // Panel Switcher Group
                 NavigationItem::make()
                     ->label('Panel Switcher')
                     ->icon('heroicon-o-squares-2x2')
@@ -107,27 +81,18 @@ class AlfaPanelProvider extends PanelProvider
                             ->icon('heroicon-o-check-circle')
                             ->isActiveWhen(fn() => request()->is('alfa*')),
                         NavigationItem::make()
-                        ->label('FTTH CUSTOMER')
-                        ->url('http://192.168.200.120:8001')
-                        ->icon('heroicon-o-arrow-right-circle'),
-                        //  NavigationItem::make()
-                        // ->label('BSI CUSTOMER')
-                        // ->url('/ftth')
-                        // ->icon('heroicon-o-arrow-right-circle'),
+                            ->label('FTTH CUSTOMER')
+                            ->url('http://192.168.200.120:8001')
+                            ->icon('heroicon-o-arrow-right-circle'),
                     ]),
             ])
-
-            // ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverResources(in: app_path('Filament/AlfaLawson/Resources'), for: 'App\\Filament\\AlfaLawson\\Resources')
-
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
                 Pages\Dashboard::class,
-                // Pages\UserResource\Pages\ListUsers::class,
             ])
             ->discoverWidgets(in: app_path('Filament/AlfaLawson/Widgets'), for: 'App\\Filament\\AlfaLawson\\Widgets')
             ->widgets([
-                // Widgets\AlfaLawsonDCMapWidget::class,
                 AlfaLawsonDCMapWidget::class,
                 StatsAlfaLawsonRemoteOverview::class,
                 MonthlyTicketChart::class,
@@ -143,7 +108,7 @@ class AlfaPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
-             ->databaseNotifications()
+            ->databaseNotifications()
             ->authMiddleware([
                 Authenticate::class,
             ])
@@ -155,25 +120,15 @@ class AlfaPanelProvider extends PanelProvider
                 '
             )
             ->plugins([
-                
-                EasyFooterPlugin::make()
+                \Swis\Filament\Backgrounds\FilamentBackgroundsPlugin::make()->showAttribution(false),
+                \Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin::make(),
+                \Joaopaulolndev\FilamentEditProfile\FilamentEditProfilePlugin::make(),
+                \Devonab\FilamentEasyFooter\EasyFooterPlugin::make()
                     ->withBorder()
-                    ->withLogo(
-                        'https://ajnusa.com/images/artacom.png',
-                        'https://ajnusa.com/'
-                    )
-                    ->withLinks([
-                        ['title' => 'Ahmad Rizki', 'url' => 'https://www.instagram.com/amad.dyk/'],
-                    ])
+                    ->withLogo('https://ajnusa.com/images/artacom.png', 'https://ajnusa.com/')
+                    ->withLinks([['title' => 'Ahmad Rizki', 'url' => 'https://www.instagram.com/amad.dyk/']])
                     ->withLoadTime('This page loaded in'),
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
-                FilamentBackgroundsPlugin::make()
-                ->showAttribution(false),
-                FilamentApexChartsPlugin::make(),
-                FilamentEditProfilePlugin::make(),
-                GlobalSearchModalPlugin::make()
-                ->highlighter(false)
             ]);
-            
     }
 }

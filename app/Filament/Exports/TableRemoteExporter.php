@@ -1,73 +1,128 @@
 <?php
 
-namespace App\Filament\Exports;
+namespace App\Exports;
 
-use App\Models\AlfaLawson\TableRemote;
-use Filament\Actions\Exports\Exporter;
-use Filament\Actions\Exports\ExportColumn;
-use Filament\Actions\Exports\Models\Export;
-use Maatwebsite\Excel\Facades\Excel;
-use Carbon\Carbon;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Color;
 
-class TableRemoteExporter extends Exporter
+class TableRemoteExporter implements FromCollection, WithHeadings, WithStyles, WithColumnWidths, WithEvents
 {
-    protected static ?string $model = TableRemote::class;
+    protected $data;
 
-    public static function getColumns(): array
+    public function __construct($data)
+    {
+        $this->data = $data;
+    }
+
+    public function collection()
+    {
+        return $this->data;
+    }
+
+    public function headings(): array
     {
         return [
-            ExportColumn::make('Site_ID')->label('Site ID'),
-            ExportColumn::make('Nama_Toko')->label('Nama Toko'),
-            ExportColumn::make('DC')->label('Distribution Center'),
-            ExportColumn::make('IP_Address')->label('IP Address'),
-            ExportColumn::make('Vlan')->label('VLAN'),
-            ExportColumn::make('Controller')->label('Controller'),
-            ExportColumn::make('Customer')->label('Customer'),
-            ExportColumn::make('Online_Date')->label('Online Date')->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d/m/Y') : '-'),
-            ExportColumn::make('Link')->label('Connection Type'),
-            ExportColumn::make('Status')->label('Status'),
-            ExportColumn::make('Keterangan')->label('Remarks'),
+            'Site ID',
+            'Nama Toko',
+            'DC', 
+            'IP Address',
+            'VLAN',
+            'Controller',
+            'Customer',
+            'Online Date',
+            'Connection Type',
+            'Status',
+            'Remarks'
         ];
     }
 
-    public static function export(Export $export): void
+    public function styles(Worksheet $sheet)
     {
-        $query = static::getFilteredQuery($export);
-        $data = $query->get();
+        // Style untuk header
+        $sheet->getStyle('A1:K1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF']
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '3490DC'] // Warna biru
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN
+                ]
+            ]
+        ]);
 
-        $export->file(
-            Excel::raw(new TableRemoteExcelExport($data), \Maatwebsite\Excel\Excel::XLSX)
-        );
+        // Style untuk data
+        $sheet->getStyle('A2:K'.$sheet->getHighestRow())->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN
+                ]
+            ],
+            'alignment' => [
+                'vertical' => Alignment::VERTICAL_CENTER
+            ]
+        ]);
+
+        // Alignment khusus kolom
+        $sheet->getStyle('A2:A'.$sheet->getHighestRow())->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('D2:D'.$sheet->getHighestRow())->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('E2:E'.$sheet->getHighestRow())->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('H2:H'.$sheet->getHighestRow())->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('J2:J'.$sheet->getHighestRow())->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        
+        // Wrap text untuk kolom Remarks
+        $sheet->getStyle('K2:K'.$sheet->getHighestRow())->getAlignment()->setWrapText(true);
     }
 
-    protected static function getFilteredQuery(Export $export)
+    public function columnWidths(): array
     {
-        $query = TableRemote::query();
-
-        $filters = $export->getFilters();
-
-        if (isset($filters['Status']) && !empty($filters['Status']['value'])) {
-            $query->whereIn('Status', (array)$filters['Status']['value']);
-        }
-
-        if (isset($filters['DC']) && !empty($filters['DC']['value'])) {
-            $query->whereIn('DC', (array)$filters['DC']['value']);
-        }
-
-        if (isset($filters['Customer']) && !empty($filters['Customer']['value'])) {
-            $query->whereIn('Customer', (array)$filters['Customer']['value']);
-        }
-
-        if (isset($filters['Link']) && !empty($filters['Link']['value'])) {
-            $query->whereIn('Link', (array)$filters['Link']['value']);
-        }
-
-        return $query;
+        return [
+            'A' => 15,  // Site ID
+            'B' => 30,  // Nama Toko
+            'C' => 20,  // DC
+            'D' => 15,  // IP Address
+            'E' => 10,  // VLAN
+            'F' => 20,  // Controller
+            'G' => 15,  // Customer
+            'H' => 15,  // Online Date
+            'I' => 18,  // Connection Type
+            'J' => 12,  // Status
+            'K' => 40   // Remarks
+        ];
     }
 
-    public static function getCompletedNotificationBody(Export $export): string
+    public function registerEvents(): array
     {
-        $count = $export->getRecordsCount();
-        return "{$count} records exported successfully!";
+        return [
+            AfterSheet::class => function(AfterSheet $event) {
+                // Auto-size semua kolom kecuali Remarks
+                foreach (range('A', 'J') as $col) {
+                    $event->sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+                
+                // Freeze header row
+                $event->sheet->freezePane('A2');
+                
+                // Set auto filter
+                $event->sheet->setAutoFilter('A1:K1');
+            },
+        ];
     }
 }

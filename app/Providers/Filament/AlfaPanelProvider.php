@@ -44,7 +44,7 @@ class AlfaPanelProvider extends PanelProvider
             ])
             ->sidebarFullyCollapsibleOnDesktop()
             ->sidebarWidth('17rem')
-            ->brandLogo(asset('images/Logo Light.png'))
+            ->brandLogo(asset('images/Loo.png'))
             ->darkModeBrandLogo(asset('images/Logo Dark.png'))
             ->brandLogoHeight(fn () => \Illuminate\Support\Facades\Auth::check() ? '3.5rem' : '7rem')
             ->renderHook(

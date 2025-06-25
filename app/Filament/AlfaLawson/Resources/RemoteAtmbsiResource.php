@@ -30,6 +30,7 @@ class RemoteAtmbsiResource extends Resource
     protected static ?string $navigationGroup = 'Network Management';
     protected static ?int $navigationSort = 2;
 
+
     public static function getModelLabel(): string
     {
         return 'Remote Atm Bsi'; // Label singular

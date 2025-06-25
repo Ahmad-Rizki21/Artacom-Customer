@@ -5,6 +5,7 @@ namespace App\Filament\AlfaLawson\Widgets;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use App\Models\AlfaLawson\TableRemote;
+use App\Models\AlfaLawson\RemoteAtmbsi;
 use App\Models\AlfaLawson\Ticket;
 use Carbon\Carbon;
 
@@ -14,22 +15,28 @@ class StatsAlfaLawsonRemoteOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        // Query untuk menghitung total remote dengan status OPERATIONAL
+        // Total remote Alfamart Lawson OPERATIONAL
         $totalRemote = TableRemote::where('Status', 'OPERATIONAL')->count();
 
-        // Query untuk menghitung total remote dengan status DISMANTLED
+        // Total remote ATM BSI OPERATIONAL
+        $totalRemoteBsi = RemoteAtmbsi::where('Status', 'OPERATIONAL')->count();
+
+        // Total remote Alfamart Lawson DISMANTLED
         $totalRemoteDismantled = TableRemote::where('Status', 'DISMANTLED')->count();
 
-        // Query untuk menghitung total remote DISMANTLED yang diubah status pada bulan ini (Juni 2025)
-        $currentMonth = Carbon::now()->format('Y-m'); // 2025-06 berdasarkan tanggal saat ini
+        // Total remote ATM BSI DISMANTLED
+        $totalRemoteBsiDismantled = RemoteAtmbsi::where('Status', 'DISMANTLED')->count();
+
+        // Total dismantled bulan ini Alfamart Lawson
+        $currentMonth = Carbon::now()->format('Y-m');
         $totalDismantledThisMonth = TableRemote::where('Status', 'DISMANTLED')
             ->whereRaw('DATE_FORMAT(updated_at, "%Y-%m") = ?', [$currentMonth])
             ->count();
 
-        // Query untuk menghitung total tiket untuk customer ALFAMART
+        // Total tiket customer ALFAMART
         $totalTicketAlfa = Ticket::where('Customer', 'ALFAMART')->count();
 
-        // Query untuk menghitung total tiket untuk customer LAWSON
+        // Total tiket customer LAWSON
         $totalTicketLawson = Ticket::where('Customer', 'LAWSON')->count();
 
         return [
@@ -37,18 +44,27 @@ class StatsAlfaLawsonRemoteOverview extends BaseWidget
                 ->description('Remote connections')
                 ->descriptionIcon('heroicon-o-globe-alt')
                 ->color('danger'),
-            // Stat::make('Total Remote Dismantled', $totalRemoteDismantled)
-            //     ->description('Dismantled connections')
-            //     ->descriptionIcon('heroicon-o-x-circle')
-            //     ->color('gray'),
-            Stat::make('Dismantled This Month', $totalDismantledThisMonth)
-                ->description('Dismantled in ' . Carbon::now()->format('F Y')) // Misalnya: "Dismantled in June 2025"
+
+            Stat::make('Total Remote Atm BSI', $totalRemoteBsi)
+                ->description('Remote connections')
+                ->descriptionIcon('heroicon-o-globe-alt')
+                ->color('info'),
+
+            Stat::make('Dismantled This Month Atm Bsi', $totalRemoteBsiDismantled)
+                ->description('Dismantled connections')
+                ->descriptionIcon('heroicon-o-x-circle')
+                ->color('gray'),
+
+            Stat::make('Dismantled This Month Alfa Lawson', $totalDismantledThisMonth)
+                ->description('Dismantled in ' . Carbon::now()->format('F Y'))
                 ->descriptionIcon('heroicon-o-calendar')
                 ->color('gray'),
+
             Stat::make('Total Ticket Alfa', $totalTicketAlfa)
                 ->description('Alfa tickets')
                 ->descriptionIcon('heroicon-o-exclamation-triangle')
                 ->color('warning'),
+
             Stat::make('Total Ticket Lawson', $totalTicketLawson)
                 ->description('Lawson tickets')
                 ->descriptionIcon('heroicon-o-check-circle')

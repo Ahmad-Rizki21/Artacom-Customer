@@ -28,7 +28,7 @@ class TableSimcardResource extends Resource
     protected static ?string $model = TableSimcard::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
-    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?string $navigationGroup = 'Sdwan Alfa Lawson';
     protected static ?string $navigationLabel = 'SIM Card';
     protected static ?string $label = 'SIM Card';
     protected static ?string $pluralLabel = 'SIM Cards';

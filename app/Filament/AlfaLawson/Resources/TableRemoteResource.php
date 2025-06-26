@@ -26,7 +26,7 @@ class TableRemoteResource extends Resource
     protected static ?string $model = TableRemote::class;
     protected static ?string $navigationIcon = 'heroicon-o-server';
     protected static ?string $navigationLabel = 'Remote Alfa Lawson';
-    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?string $navigationGroup = 'Sdwan Alfa Lawson';
     protected static ?int $navigationSort = 1;
 
     public static function getModelLabel(): string

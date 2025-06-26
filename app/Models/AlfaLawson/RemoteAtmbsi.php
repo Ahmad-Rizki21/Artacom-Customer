@@ -124,4 +124,18 @@ class RemoteAtmbsi extends Model
             return collect([]);
         }
     }
+
+    // Relasi ke TableSimcard (banyak simcard untuk satu Site_ID)
+    public function simcards(): HasMany
+    {
+        return $this->hasMany(TableSimcard::class, 'Site_ID', 'Site_ID');
+    }
+
+    // Relasi ke TableFo (banyak FO untuk satu Site_ID)
+    public function fos(): HasMany
+    {
+        return $this->hasMany(TableFo::class, 'Site_ID', 'Site_ID');
+    }
+
+    
 }

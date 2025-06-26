@@ -23,7 +23,7 @@ class TableFoResource extends Resource
 {
     protected static ?string $model = TableFo::class;
     protected static ?string $navigationIcon = 'heroicon-o-signal';
-    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?string $navigationGroup = 'Sdwan Alfa Lawson';
     protected static ?int $navigationSort = 2;
     protected static ?string $modelLabel = 'Fiber Optic';
     protected static ?string $pluralModelLabel = 'Fiber Optic Connections';

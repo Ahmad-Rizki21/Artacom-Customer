@@ -59,7 +59,8 @@ class AlfaPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Panel Switcher',
                 'Support',
-                'Network Management',
+                'Sdwan Alfa Lawson',
+                'Sdwan Network Atm',
             ])
             ->navigationItems([
                 NavigationItem::make()

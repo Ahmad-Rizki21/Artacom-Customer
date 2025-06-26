@@ -104,6 +104,10 @@ class TableSimcard extends Model
         });
     }
 
+    public function remoteAtmbsi()
+    {
+        return $this->belongsTo(RemoteAtmbsi::class, 'Site_ID', 'Site_ID');
+    }
     public function remote()
     {
         return $this->belongsTo(TableRemote::class, 'Site_ID', 'Site_ID')->withDefault();

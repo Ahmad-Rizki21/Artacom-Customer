@@ -27,7 +27,7 @@ class RemoteAtmbsiResource extends Resource
     protected static ?string $model = RemoteAtmbsi::class;
     protected static ?string $navigationIcon = 'heroicon-o-server';
     protected static ?string $navigationLabel = 'Remote BSI'; // Label disesuaikan menjadi "Remote BSI"
-    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?string $navigationGroup = 'Sdwan Network Atm';
     protected static ?int $navigationSort = 2;
 
 
@@ -422,6 +422,7 @@ class RemoteAtmbsiResource extends Resource
         return [
             'index' => Pages\ListRemoteAtmbsis::route('/'),
             'create' => Pages\CreateRemoteAtmbsi::route('/create'),
+            'view' => Pages\ViewRemoteAtmbsi::route('/{record}'),
             'edit' => Pages\EditRemoteAtmbsi::route('/{record}/edit'),
         ];
     }

@@ -25,7 +25,7 @@ class TablePeplinkResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-server-stack';
     protected static ?string $navigationLabel = 'Peplink Device';
     protected static ?string $modelLabel = 'Peplink Device';
-    protected static ?string $navigationGroup = 'Network Management';
+    protected static ?string $navigationGroup = 'Sdwan Alfa Lawson';
     protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form

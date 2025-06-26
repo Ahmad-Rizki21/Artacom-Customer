@@ -106,6 +106,13 @@ class TableFo extends Model
         return $this->belongsTo(TableRemote::class, 'Site_ID', 'Site_ID');
     }
 
+    public function remoteAtmbsi()
+    {
+        return $this->belongsTo(RemoteAtmbsi::class, 'Site_ID', 'Site_ID');
+    }
+
+    
+
     public function histories(): HasMany
     {
         return $this->hasMany(TableFoHistory::class, 'fo_id', 'ID')
